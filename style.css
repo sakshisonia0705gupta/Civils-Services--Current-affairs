@@ -1,0 +1,302 @@
+    
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --navy: #10243a;
+  --blue: #244d70;
+  --gold: #d5a64b;
+  --background: #f4f6f9;
+  --white: #ffffff;
+  --text: #263445;
+  --muted: #718096;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: var(--background);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.app-header {
+  background: var(--navy);
+  color: white;
+  padding: 20px 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 900px;
+  margin: auto;
+}
+
+.brand-icon {
+  font-size: 34px;
+}
+
+.brand h1 {
+  font-size: 20px;
+}
+
+.brand p {
+  font-size: 12px;
+  color: #c6d2df;
+}
+
+main {
+  width: 100%;
+  max-width: 900px;
+  margin: auto;
+  padding: 18px 14px 30px;
+}
+
+.welcome {
+  background: linear-gradient(135deg, #10243a, #315c7e);
+  color: white;
+  border-radius: 16px;
+  padding: 25px 20px;
+  margin-bottom: 25px;
+}
+
+.eyebrow {
+  color: #f0c66e;
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+.welcome h2 {
+  font-size: 25px;
+  margin: 8px 0;
+}
+
+.welcome p {
+  font-size: 14px;
+  color: #e0e9f1;
+}
+
+section h2 {
+  font-size: 19px;
+  margin-bottom: 13px;
+  color: var(--navy);
+}
+
+.daily-section,
+.main-section,
+.reader-section {
+  margin-bottom: 27px;
+}
+
+.tab-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  flex: 1;
+  padding: 11px 5px;
+  border: 1px solid #dce2e9;
+  background: white;
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tab.active {
+  background: var(--navy);
+  color: white;
+  border-color: var(--navy);
+}
+
+.content-panel {
+  background: white;
+  border: 1px solid #e4e9ef;
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 90px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.feature-card {
+  background: white;
+  border: 1px solid #e4e9ef;
+  border-radius: 13px;
+  padding: 17px 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 125px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.feature-card span {
+  font-size: 25px;
+}
+
+.feature-card strong {
+  font-size: 14px;
+  color: var(--navy);
+}
+
+.feature-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feature-card:active,
+.tab:active {
+  transform: scale(0.98);
+}
+
+footer {
+  text-align: center;
+  padding: 20px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (min-width: 650px) {
+  .feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .welcome h2 {
+    font-size: 32px;
+  }
+}
+
+
+/* Subject library */
+
+.subject-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.subject-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 13px;
+  background: #f7f9fc;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14px;
+  color: #263445;
+  cursor: pointer;
+}
+
+.subject-item span {
+  background: #e8eef5;
+  color: #244d70;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-weight: bold;
+}
+
+/* Study options */
+
+.study-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.study-option {
+  padding: 14px 10px;
+  background: #f3f6fa;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #244d70;
+}
+
+/* Buttons */
+
+.action-button {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  margin-top: 13px;
+  background: #10243a;
+  color: white;
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.muted {
+  color: #718096;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+/* Notes */
+
+#note-input,
+#bookmark-input {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #dce2e9;
+  border-radius: 9px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+#note-input {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.note-card {
+  background: #f7f9fc;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  padding: 13px;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+  color: #263445;
+  font-size: 14px;
+}
+
+.delete-note {
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid #d9a0a0;
+  color: #a33c3c;
+  background: white;
+  border-radius: 7px;
+}
+
+/* Responsive layout */
+
+@media (min-width: 600px) {
+  .subject-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+
