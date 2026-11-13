@@ -7,7 +7,7 @@ from pathlib import Path
 
 RSS_URL = (
     "https://pib.gov.in/RssMain.aspx"
-    "?ModId=6&Lang=1&Regid=1"
+    "?ModId=6&Lang=1&Regid=6"
 )
 
 def fetch_pib_news():
