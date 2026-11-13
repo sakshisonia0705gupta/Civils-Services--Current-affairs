@@ -1,0 +1,103 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#10243a">
+  <meta name="description" content="Your personal UPSC current affairs and preparation hub.">
+
+  <title>UPSC Intelligence Hub</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-icon">📚</span>
+      <div>
+        <h1>UPSC Intelligence Hub</h1>
+        <p>Your personal civil services companion</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="welcome">
+      <p class="eyebrow">YOUR PREPARATION SPACE</p>
+      <h2>Think. Analyse. Prepare.</h2>
+      <p>One place for current affairs, concepts, revision and tests.</p>
+    </section>
+
+    <section class="daily-section">
+      <h2>Current Affairs</h2>
+      <div class="tab-container">
+        <button class="tab active" data-section="daily">Daily</button>
+        <button class="tab" data-section="weekly">Weekly</button>
+        <button class="tab" data-section="monthly">Monthly</button>
+      </div>
+      <div id="current-affairs-content" class="content-panel">
+        <p>Your daily current affairs will appear here.</p>
+      </div>
+    </section>
+
+    <section class="main-section">
+      <h2>Explore UPSC</h2>
+      <div class="feature-grid">
+        <button class="feature-card" data-page="subjects">
+          <span>📖</span>
+          <strong>30 Subjects</strong>
+          <small>Explore the syllabus</small>
+        </button>
+
+        <button class="feature-card" data-page="tests">
+          <span>📝</span>
+          <strong>Practice Tests</strong>
+          <small>Prelims and Mains</small>
+        </button>
+
+        <button class="feature-card" data-page="revision">
+          <span>🔁</span>
+          <strong>Revision</strong>
+          <small>Revise important topics</small>
+        </button>
+
+        <button class="feature-card" data-page="notes">
+          <span>📒</span>
+          <strong>My Notes</strong>
+          <small>Your personal notes</small>
+        </button>
+
+        <button class="feature-card" data-page="bookmarks">
+          <span>⭐</span>
+          <strong>Bookmarks</strong>
+          <small>Save important content</small>
+        </button>
+
+        <button class="feature-card" data-page="pdf">
+          <span>📄</span>
+          <strong>Monthly PDFs</strong>
+          <small>Current affairs compilations</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="reader-section">
+      <h2>Study Area</h2>
+      <div id="page-content" class="content-panel">
+        <p>Select a section above to begin.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>UPSC Intelligence Hub · Personal Study Edition</p>
+  </footer>
+
+      <script src="app.js"></script>
+</body>
+</html>
+
+
