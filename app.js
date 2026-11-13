@@ -151,3 +151,28 @@ document.querySelectorAll(".tab").forEach(button => {
 
 showFeature("subjects");
 
+
+    
+
+    const xmlText = await response.text();
+    const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+    const items = [...xml.querySelectorAll("item")].slice(0, 5);
+
+    if (!items.length) {
+      throw new Error("No news items received");
+    }
+
+    panel.innerHTML = items.map(item => `
+      <article class="news-card">
+        <h3>${item.querySelector("title")?.textContent || "PIB Update"}</h3>
+        <p>${item.querySelector("description")?.textContent || ""}</p>
+        <a href="${item.querySelector("link")?.textContent || "#"}"
+           target="_blank" rel="noopener">Read official update</a>
+      </article>
+    `).join("");
+  } catch (error) {
+    panel.innerHTML =
+      "<p>PIB feed could not be loaded. We will configure a reliable feed connection next.</p>";
+    console.error(error);
+  }
+                          }
