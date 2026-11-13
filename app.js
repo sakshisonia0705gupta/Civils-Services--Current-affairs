@@ -33,7 +33,14 @@ const subjects = [
 ];
 
 const content = document.getElementById("page-content");
-const currentAffairs = document.getElementById("current-affairs-content");
+const currentAffairs =
+  document.getElementById("current-affairs-content");
+
+function escapeHTML(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value);
+  return div.innerHTML;
+}
 
 function showSubjects() {
   content.innerHTML = `
@@ -48,20 +55,35 @@ function showSubjects() {
   `;
 }
 
-function showNotes() {
-  const savedNotes = localStorage.getItem("upscNotes") || "";
+function showSubjectDetail(index) {
+  const subject = subjects[index];
+  if (!subject) return;
 
+  content.innerHTML = `
+    <h3>${escapeHTML(subject)}</h3>
+    <p>Study materials and current affairs for this subject
+    will appear here.</p>
+    <button id="backToSubjects">Back to Subjects</button>
+  `;
+
+  document.getElementById("backToSubjects")
+    .addEventListener("click", showSubjects);
+}
+
+function showNotes() {
   content.innerHTML = `
     <h3>My Personal Notes</h3>
     <textarea id="notesArea"
-      placeholder="Write your UPSC notes here...">${savedNotes}</textarea>
+      placeholder="Write your UPSC notes here..."></textarea>
     <button id="saveNotes">Save Notes</button>
     <p id="noteMessage"></p>
   `;
 
+  const notesArea = document.getElementById("notesArea");
+  notesArea.value = localStorage.getItem("upscNotes") || "";
+
   document.getElementById("saveNotes").addEventListener("click", () => {
-    const notes = document.getElementById("notesArea").value;
-    localStorage.setItem("upscNotes", notes);
+    localStorage.setItem("upscNotes", notesArea.value);
     document.getElementById("noteMessage").textContent =
       "Your notes have been saved!";
   });
@@ -74,31 +96,33 @@ function showBookmarks() {
 
   content.innerHTML = `
     <h3>My Bookmarks</h3>
-    <p>Saved subjects:</p>
-    ${bookmarks.length
-      ? bookmarks.map(item => `<p>⭐ ${escapeHTML(item)}</p>`).join("")
-      : "<p>No bookmarks yet.</p>"
-    }
-    <input id="bookmarkInput" placeholder="Enter a topic to bookmark">
+    <div id="bookmarkList">
+      ${bookmarks.length
+        ? bookmarks.map(item =>
+            `<p>⭐ ${escapeHTML(item)}</p>`
+          ).join("")
+        : "<p>No bookmarks yet.</p>"
+      }
+    </div>
+    <input id="bookmarkInput"
+      placeholder="Enter a topic to bookmark">
     <button id="addBookmark">Add Bookmark</button>
   `;
 
-  document.getElementById("addBookmark").addEventListener("click", () => {
-    const input = document.getElementById("bookmarkInput");
-    const topic = input.value.trim();
+  document.getElementById("addBookmark")
+    .addEventListener("click", () => {
+      const input = document.getElementById("bookmarkInput");
+      const topic = input.value.trim();
 
-    if (!topic) return;
+      if (!topic) return;
 
-    bookmarks.push(topic);
-    localStorage.setItem("upscBookmarks", JSON.stringify(bookmarks));
-    showBookmarks();
-  });
-}
-
-function escapeHTML(value) {
-  const div = document.createElement("div");
-  div.textContent = value;
-  return div.innerHTML;
+      bookmarks.push(topic);
+      localStorage.setItem(
+        "upscBookmarks",
+        JSON.stringify(bookmarks)
+      );
+      showBookmarks();
+    });
 }
 
 function showFeature(page) {
@@ -126,54 +150,44 @@ function showFeature(page) {
   }
 }
 
+// Main feature buttons
 document.querySelectorAll(".feature-card").forEach(button => {
   button.addEventListener("click", () => {
     showFeature(button.dataset.page);
   });
 });
 
+// Subject selection
+content.addEventListener("click", event => {
+  const button = event.target.closest("[data-subject]");
+  if (button) {
+    showSubjectDetail(Number(button.dataset.subject));
+  }
+});
+
+// Daily, Weekly and Monthly tabs
 document.querySelectorAll(".tab").forEach(button => {
   button.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(tab =>
-      tab.classList.remove("active")
-    );
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.classList.remove("active");
+    });
 
     button.classList.add("active");
 
     const section = button.dataset.section;
 
     currentAffairs.innerHTML = `
-      <h3>${section.charAt(0).toUpperCase() + section.slice(1)} Current Affairs</h3>
-      <p>News and AI-generated UPSC notes will appear here once the news service is connected.</p>
+      <h3>${section.charAt(0).toUpperCase() +
+        section.slice(1)} Current Affairs</h3>
+      <p>News and AI-generated UPSC notes will appear here
+      once the news service is connected.</p>
     `;
   });
 });
 
+// Initial dashboard content
 showFeature("subjects");
 
-
-    
-
-    const xmlText = await response.text();
-    const xml = new DOMParser().parseFromString(xmlText, "text/xml");
-    const items = [...xml.querySelectorAll("item")].slice(0, 5);
-
-    if (!items.length) {
-      throw new Error("No news items received");
-    }
-
-    panel.innerHTML = items.map(item => `
-      <article class="news-card">
-        <h3>${item.querySelector("title")?.textContent || "PIB Update"}</h3>
-        <p>${item.querySelector("description")?.textContent || ""}</p>
-        <a href="${item.querySelector("link")?.textContent || "#"}"
-           target="_blank" rel="noopener">Read official update</a>
-      </article>
-    `).join("");
-  } catch (error) {
-    panel.innerHTML =
-      "<p>PIB feed could not be loaded. We will configure a reliable feed connection next.</p>";
-    console.error(error);
-  }
-                          }
-
+currentAffairs.innerHTML = `
+  <p>Your daily current affairs will appear here.</p>
+`;
