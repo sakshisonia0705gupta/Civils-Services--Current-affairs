@@ -1,0 +1,13 @@
+
+{
+  "name": "UPSC Intelligence Hub",
+  "short_name": "UPSC Hub",
+  "description": "Personal UPSC preparation and current affairs app",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f9",
+  "theme_color": "#10243a",
+  "icons": []
+}
