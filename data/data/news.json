@@ -1,1 +1,15 @@
-[]
+
+[
+  {
+    "id": "sample-001",
+    "date": "2026-11-14",
+    "source": "PIB",
+    "category": "Governance",
+    "title": "Sample government update",
+    "summary": "This is a sample entry to test the current affairs data structure.",
+    "prelims_facts": [],
+    "mains_analysis": "",
+    "source_url": "",
+    "is_sample": true
+  }
+]
