@@ -11,13 +11,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-
-RSS_URL = (
+ RSS_URL = (
     "https://pib.gov.in/RssMain.aspx"
-    "?ModId=6&Lang=1&Regid=3"
-)
-
-LISTING_URL = (
+     "?ModId=6&Lang=1&Regid=3&reg=3"
+                 
+             ISTING_URL = (
     "https://www.pib.gov.in/AllRelease.aspx"
     "?lang=1&reg=1"
 )
