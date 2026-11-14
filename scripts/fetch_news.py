@@ -8,7 +8,7 @@ from pathlib import Path
 
 RSS_URL = (
     "https://pib.gov.in/RssMain.aspx"
-    "?ModId=6&Lang=1&Regid=6"
+    "?ModId=6&Lang=1&Regid=1"
 )
 
 def local_name(tag):
