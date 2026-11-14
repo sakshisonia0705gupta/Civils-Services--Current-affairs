@@ -25,6 +25,40 @@ def clean_text(value):
     value = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", value).strip()
 
+def get_posted_date(url):
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        with urllib.request.urlopen(request, timeout=20) as response:
+            page = response.read().decode("utf-8", errors="ignore")
+
+        match = re.search(
+            r"Posted\s*On\s*:?\s*(\d{1,2}\s+[A-Za-z]+\s*,?\s+\d{4})",
+            page,
+            re.IGNORECASE
+        )
+
+        if match:
+            from datetime import datetime
+
+            date_text = match.group(1).replace(",", "").strip()
+
+            for date_format in ("%d %B %Y",):
+                try:
+                    return datetime.strptime(
+                        date_text, date_format
+                    ).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+
+    except Exception as error:
+        print("Could not read article date:", error)
+
+    return ""
+
 def fetch_pib_news():
     request = urllib.request.Request(
         RSS_URL,
