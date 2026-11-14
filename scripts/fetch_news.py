@@ -421,24 +421,79 @@ def fetch_pib_news():
             "is_sample": False,
         })
 
+    
     # Protect existing news if the filter returns zero results.
     if not news_items:
-
         raise RuntimeError(
             "No PIB articles matched the UPSC filter. "
             "Existing data/news.json has been left untouched."
         )
 
     output = Path("data/news.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
 
-    output.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    # Load the existing archive.
+    existing_items = []
+
+    if output.exists():
+        try:
+            existing_items = json.loads(
+                output.read_text(encoding="utf-8")
+            )
+
+            if not isinstance(existing_items, list):
+                raise ValueError("News archive is not a list.")
+
+        except (json.JSONDecodeError, ValueError) as error:
+            raise RuntimeError(
+                "Existing news archive could not be read safely. "
+                "No changes were made."
+            ) from error
+
+    # Merge old and new articles using their source URL as the unique ID.
+    merged = {
+        article.get("source_url") or article.get("id"): article
+        for article in existing_items
+        if isinstance(article, dict)
+        and (article.get("source_url") or article.get("id"))
+    }
+
+    added_count = 0
+    updated_count = 0
+
+    for article in news_items:
+        article_id = article["source_url"]
+
+        if article_id in merged:
+            # Preserve existing notes and any enriched fields.
+            old_article = merged[article_id]
+
+            for key, value in article.items():
+                if key in ("summary", "prelims_facts", "mains_analysis"):
+                    if old_article.get(key):
+                        continue
+
+                if key == "upsc_angle" and old_article.get(key):
+                    continue
+
+                old_article[key] = value
+
+            updated_count += 1
+
+        else:
+            merged[article_id] = article
+            added_count += 1
+
+    # Keep newest articles first.
+    archive = sorted(
+        merged.values(),
+        key=lambda article: article.get("date") or "",
+        reverse=True,
     )
 
     output.write_text(
         json.dumps(
-            news_items,
+            archive,
             ensure_ascii=False,
             indent=2,
         ),
@@ -446,29 +501,14 @@ def fetch_pib_news():
     )
 
     dated_count = sum(
-        1 for article in news_items if article["date"]
+        1 for article in archive if article.get("date")
     )
 
-    print(
-        "Successfully retained",
-        len(news_items),
-        "UPSC-relevant PIB articles.",
-    )
-
-    print(
-        "Skipped as low/unclear relevance:",
-        skipped_count,
-    )
-
-    print(
-        "Articles with usable dates:",
-        dated_count,
-    )
-
-    print(
-        "Example saved date:",
-        news_items[0]["date"],
-    )
+    print("New articles added:", added_count)
+    print("Existing articles refreshed:", updated_count)
+    print("Total articles in archive:", len(archive))
+    print("Articles with usable dates:", dated_count)
+    print("Archive saved successfully.")
 
 
 if __name__ == "__main__":
