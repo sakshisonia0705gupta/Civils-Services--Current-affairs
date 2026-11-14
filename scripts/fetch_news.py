@@ -62,26 +62,23 @@ def fetch_pib_news():
             or get_text(item, {"content"})
         )
 
+       
         pub_date = ""
 
         for element in item.iter():
-          if local_name(element.tag) in 
-    
-    {
-               "pubdate",    "published",
-        
-    "updated",          
-                  "date", "issued",
-    "created"
-        
-                }:
-      
-                     candidate = 
-                    
-    "".join(element.itertext()).strip()
-                   if candidate:
-                       pub_date = candidate
-                        break
+            if local_name(element.tag) in {
+                "pubdate",
+                "published",
+                "updated",
+                "date",
+                "issued",
+                "created"
+            }:
+                candidate = "".join(element.itertext()).strip()
+                if candidate:
+                    pub_date = candidate
+                    break
+
 
         if not title or not link:
             continue
