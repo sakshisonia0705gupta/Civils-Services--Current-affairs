@@ -177,8 +177,29 @@ def fetch_pib_news():
         if local_name(element.tag) in ("item", "entry")
     ]
 
-    print("Feed entries found:", len(entries))
+    print("Feed entries found:",  
+    len(entries))
+      if entries:
+        print("PIB DATE DIAGNOSTIC:")
+        for element in entries[0].iter():
+            tag = local_name(element.tag)
+            value = "".join(element.itertext()).strip()
 
+            if any(word in tag for word in (
+                "date", "time", "pub", "updated", "created"
+            )):
+                print("Field:", tag, "| Value:", value[:100])
+
+            elif re.search(
+                r"\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4}",
+                value
+            ):
+                print("Possible date:", value[:100])
+
+        print(
+            "Parsed feed date:",
+            get_feed_date(entries[0]) or "NOT FOUND"
+             )
     news_items = []
 
     for item in entries:
