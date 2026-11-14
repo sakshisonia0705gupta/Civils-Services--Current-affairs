@@ -1,44 +1,25 @@
 
 const subjects = [
-  "Constitution",
-  "Indian Polity",
-  "Governance",
-  "Social Justice",
-  "International Relations",
-  "Ancient History",
-  "Medieval History",
-  "Modern History",
-  "Art & Culture",
-  "Indian Society",
-  "Physical Geography",
-  "Indian Geography",
-  "World Geography",
-  "Indian Economy",
-  "Environment & Biodiversity",
-  "Agriculture",
-  "Banking",
-  "Space Technology",
-  "Defence",
-  "Internal Security",
-  "Disaster Management",
-  "Ethics",
-  "Education",
-  "Health",
-  "Government Schemes",
-  "Reports and Indices",
-  "Environment Laws",
-  "International Organisations",
-  "Science and Technology",
+  "Constitution", "Indian Polity", "Governance", "Social Justice",
+  "International Relations", "Ancient History", "Medieval History",
+  "Modern History", "Art & Culture", "Indian Society",
+  "Physical Geography", "Indian Geography", "World Geography",
+  "Indian Economy", "Environment & Biodiversity", "Agriculture",
+  "Banking", "Space Technology", "Defence", "Internal Security",
+  "Disaster Management", "Ethics", "Education", "Health",
+  "Government Schemes", "Reports and Indices", "Environment Laws",
+  "International Organisations", "Science and Technology",
   "Miscellaneous"
 ];
 
 const content = document.getElementById("page-content");
-const currentAffairs =
-  document.getElementById("current-affairs-content");
+const currentAffairs = document.getElementById("current-affairs-content");
+
+let newsItems = [];
 
 function escapeHTML(value) {
   const div = document.createElement("div");
-  div.textContent = String(value);
+  div.textContent = String(value ?? "");
   return div.innerHTML;
 }
 
@@ -48,7 +29,7 @@ function showSubjects() {
     <div class="subject-list">
       ${subjects.map((subject, index) => `
         <button class="subject-item" data-subject="${index}">
-          ${index + 1}. ${subject}
+          ${index + 1}. ${escapeHTML(subject)}
         </button>
       `).join("")}
     </div>
@@ -61,8 +42,7 @@ function showSubjectDetail(index) {
 
   content.innerHTML = `
     <h3>${escapeHTML(subject)}</h3>
-    <p>Study materials and current affairs for this subject
-    will appear here.</p>
+    <p>Study materials and current affairs for this subject will appear here.</p>
     <button id="backToSubjects">Back to Subjects</button>
   `;
 
@@ -73,8 +53,7 @@ function showSubjectDetail(index) {
 function showNotes() {
   content.innerHTML = `
     <h3>My Personal Notes</h3>
-    <textarea id="notesArea"
-      placeholder="Write your UPSC notes here..."></textarea>
+    <textarea id="notesArea" placeholder="Write your UPSC notes here..."></textarea>
     <button id="saveNotes">Save Notes</button>
     <p id="noteMessage"></p>
   `;
@@ -96,33 +75,24 @@ function showBookmarks() {
 
   content.innerHTML = `
     <h3>My Bookmarks</h3>
-    <div id="bookmarkList">
+    <div>
       ${bookmarks.length
-        ? bookmarks.map(item =>
-            `<p>⭐ ${escapeHTML(item)}</p>`
-          ).join("")
-        : "<p>No bookmarks yet.</p>"
-      }
+        ? bookmarks.map(item => `<p>⭐ ${escapeHTML(item)}</p>`).join("")
+        : "<p>No bookmarks yet.</p>"}
     </div>
-    <input id="bookmarkInput"
-      placeholder="Enter a topic to bookmark">
+    <input id="bookmarkInput" placeholder="Enter a topic to bookmark">
     <button id="addBookmark">Add Bookmark</button>
   `;
 
-  document.getElementById("addBookmark")
-    .addEventListener("click", () => {
-      const input = document.getElementById("bookmarkInput");
-      const topic = input.value.trim();
+  document.getElementById("addBookmark").addEventListener("click", () => {
+    const input = document.getElementById("bookmarkInput");
+    const topic = input.value.trim();
+    if (!topic) return;
 
-      if (!topic) return;
-
-      bookmarks.push(topic);
-      localStorage.setItem(
-        "upscBookmarks",
-        JSON.stringify(bookmarks)
-      );
-      showBookmarks();
-    });
+    bookmarks.push(topic);
+    localStorage.setItem("upscBookmarks", JSON.stringify(bookmarks));
+    showBookmarks();
+  });
 }
 
 function showFeature(page) {
@@ -150,6 +120,86 @@ function showFeature(page) {
   }
 }
 
+function renderNews(section = "daily") {
+  if (!currentAffairs) return;
+
+  let filtered = [...newsItems];
+
+  if (section === "daily") {
+    const today = new Date().toDateString();
+    filtered = filtered.filter(item =>
+      item.date && !Number.isNaN(Date.parse(item.date)) &&
+      new Date(item.date).toDateString() === today
+    );
+  } else if (section === "weekly") {
+    const now = new Date();
+    const weekAgo = new Date();
+    weekAgo.setDate(now.getDate() - 7);
+
+    filtered = filtered.filter(item => {
+      if (!item.date || Number.isNaN(Date.parse(item.date))) return false;
+      const date = new Date(item.date);
+      return date >= weekAgo && date <= now;
+    });
+  } else if (section === "monthly") {
+    const now = new Date();
+    filtered = filtered.filter(item => {
+      if (!item.date || Number.isNaN(Date.parse(item.date))) return false;
+      const date = new Date(item.date);
+      return date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear();
+    });
+  }
+
+  const heading = section.charAt(0).toUpperCase() + section.slice(1);
+
+  currentAffairs.innerHTML = `
+    <h3>${heading} Current Affairs</h3>
+    <p>News collected: ${filtered.length}</p>
+    ${filtered.length ? filtered.map(item => `
+      <article class="news-item">
+        <h4>${escapeHTML(item.title)}</h4>
+        <p><strong>Source:</strong> ${escapeHTML(item.source || "Unknown")}</p>
+        <p><strong>Subject:</strong> ${escapeHTML(item.category || "Miscellaneous")}</p>
+        ${item.summary ? `<p>${escapeHTML(item.summary)}</p>` : ""}
+        ${item.source_url ? `
+          <a href="${escapeHTML(item.source_url)}"
+             target="_blank" rel="noopener noreferrer">
+            Read original article
+          </a>
+        ` : ""}
+      </article>
+    `).join("") : `
+      <p>No dated articles are available in this section yet.</p>
+      <p>New articles will appear here when the news feed provides usable dates.</p>
+    `}
+  `;
+}
+
+async function loadNews() {
+  currentAffairs.innerHTML = "<p>Loading current affairs...</p>";
+
+  try {
+    const response = await fetch("data/news.json");
+
+    if (!response.ok) {
+      throw new Error("News file could not be loaded.");
+    }
+
+    const data = await response.json();
+    newsItems = Array.isArray(data) ? data : [];
+
+    renderNews("daily");
+  } catch (error) {
+    currentAffairs.innerHTML = `
+      <h3>Current Affairs</h3>
+      <p>Unable to load news right now.</p>
+      <p>Please check the news data file and try again.</p>
+    `;
+    console.error(error);
+  }
+}
+
 // Main feature buttons
 document.querySelectorAll(".feature-card").forEach(button => {
   button.addEventListener("click", () => {
@@ -173,21 +223,10 @@ document.querySelectorAll(".tab").forEach(button => {
     });
 
     button.classList.add("active");
-
-    const section = button.dataset.section;
-
-    currentAffairs.innerHTML = `
-      <h3>${section.charAt(0).toUpperCase() +
-        section.slice(1)} Current Affairs</h3>
-      <p>News and AI-generated UPSC notes will appear here
-      once the news service is connected.</p>
-    `;
+    renderNews(button.dataset.section);
   });
 });
 
-// Initial dashboard content
+// Start dashboard
 showFeature("subjects");
-
-currentAffairs.innerHTML = `
-  <p>Your daily current affairs will appear here.</p>
-`;
+loadNews();
