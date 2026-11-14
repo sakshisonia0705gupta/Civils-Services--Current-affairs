@@ -3,6 +3,8 @@ import json
 import re
 import urllib.request
 import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
+from datetime import datetime
 from html import unescape
 from pathlib import Path
 
@@ -11,8 +13,10 @@ RSS_URL = (
     "?ModId=6&Lang=1&Regid=3"
 )
 
+
 def local_name(tag):
     return tag.rsplit("}", 1)[-1].lower()
+
 
 def get_text(element, names):
     for child in element:
@@ -20,10 +24,39 @@ def get_text(element, names):
             return "".join(child.itertext()).strip()
     return ""
 
+
 def clean_text(value):
     value = unescape(value)
     value = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", value).strip()
+
+
+def normalize_date(value):
+    if not value:
+        return ""
+
+    value = value.strip()
+
+    try:
+        return parsedate_to_datetime(value).strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        pass
+
+    for date_format in (
+        "%d %B %Y",
+        "%d %b %Y",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(
+                value.replace(",", "").strip(),
+                date_format
+            ).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    return ""
+
 
 def get_posted_date(url):
     try:
@@ -32,37 +65,34 @@ def get_posted_date(url):
             headers={"User-Agent": "Mozilla/5.0"}
         )
 
-        with urllib.request.urlopen(request, timeout=20) as response:
-            page = response.read().decode("utf-8", errors="ignore")
+        with urllib.request.urlopen(request, timeout=12) as response:
+            page = response.read().decode(
+                "utf-8",
+                errors="ignore"
+            )
 
         match = re.search(
-            r"Posted\s*On\s*:?\s*(\d{1,2}\s+[A-Za-z]+\s*,?\s+\d{4})",
+            r"Posted\s*On\s*:?\s*"
+            r"(\d{1,2}\s+[A-Za-z]+\s*,?\s+\d{4})",
             page,
             re.IGNORECASE
         )
 
         if match:
-            from datetime import datetime
-
-            date_text = match.group(1).replace(",", "").strip()
-
-            for date_format in ("%d %B %Y",):
-                try:
-                    return datetime.strptime(
-                        date_text, date_format
-                    ).strftime("%Y-%m-%d")
-                except ValueError:
-                    pass
+            return normalize_date(match.group(1))
 
     except Exception as error:
         print("Could not read article date:", error)
 
     return ""
 
+
 def fetch_pib_news():
     request = urllib.request.Request(
         RSS_URL,
-        headers={"User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"}
+        headers={
+            "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
+        }
     )
 
     with urllib.request.urlopen(request, timeout=40) as response:
@@ -96,29 +126,31 @@ def fetch_pib_news():
             or get_text(item, {"content"})
         )
 
-       
-        
-          pub_date = ""
+        # First try the actual publication date on the PIB article.
+        pub_date = ""
 
-          if link:
-            pub_date =
- get_posted_date(link)
+        if link:
+            pub_date = get_posted_date(link)
 
-          for element in item.iter():
+        # If the article page date is unavailable, use the RSS date.
+        if not pub_date:
+            for element in item.iter():
+                if local_name(element.tag) in {
+                    "pubdate",
+                    "published",
+                    "updated",
+                    "date",
+                    "issued",
+                    "created"
+                }:
+                    candidate = "".join(
+                        element.itertext()
+                    ).strip()
 
-            if local_name(element.tag) in {
-                "pubdate",
-                "published",
-                "updated",
-                "date",
-                "issued",
-                "created"
-            }:
-                candidate = "".join(element.itertext()).strip()
-                if candidate:
-                    pub_date = candidate
-                    break
-
+                    if candidate:
+                        pub_date = normalize_date(candidate)
+                        if pub_date:
+                            break
 
         if not title or not link:
             continue
@@ -138,7 +170,8 @@ def fetch_pib_news():
 
     if not news_items:
         raise RuntimeError(
-            "No PIB articles found. Check the feed response and XML format."
+            "No PIB articles found. Check the feed response "
+            "and XML format."
         )
 
     output = Path("data/news.json")
@@ -149,7 +182,17 @@ def fetch_pib_news():
         encoding="utf-8"
     )
 
-    print("Successfully collected", len(news_items), "PIB articles.")
+    dated_count = sum(
+        1 for item in news_items if item["date"]
+    )
+
+    print(
+        "Successfully collected",
+        len(news_items),
+        "PIB articles."
+    )
+    print("Articles with usable dates:", dated_count)
+
 
 if __name__ == "__main__":
     fetch_pib_news()
