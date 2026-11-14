@@ -282,42 +282,115 @@ def get_listing_date_map():
     return parser.dates
 
 
+
 def get_posted_date(url):
 
     try:
-
         request = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0"},
         )
 
         with urllib.request.urlopen(
-            request, timeout=20
+            request, timeout=25
         ) as response:
-
             page = response.read().decode(
                 "utf-8",
                 errors="ignore",
             )
 
-        match = re.search(
-            r"Posted\s*On\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
-            unescape(page),
+        # 1. Check official publication-date metadata.
+        meta_tags = re.findall(
+            r"<meta\b[^>]*>",
+            page,
             re.IGNORECASE,
         )
 
-        if match:
-            return normalize_date(match.group(1))
+        accepted_names = {
+            "article:published_time",
+            "datepublished",
+            "dc.date",
+            "date",
+            "pubdate",
+        }
+
+        for tag in meta_tags:
+            attrs = dict(
+                re.findall(
+                    r"""([\w:-]+)\s*=\s*["']([^"']*)["']""",
+                    tag,
+                    re.IGNORECASE,
+                )
+            )
+
+            name = (
+                attrs.get("property")
+                or attrs.get("name")
+                or attrs.get("itemprop")
+                or ""
+            ).lower()
+
+            if name in accepted_names:
+                result = normalize_date(
+                    attrs.get("content", "")
+                )
+
+                if result:
+                    return result
+
+        # 2. Check HTML time elements.
+        time_tags = re.findall(
+            r"<time\b[^>]*>",
+            page,
+            re.IGNORECASE,
+        )
+
+        for tag in time_tags:
+            match = re.search(
+                r"""datetime\s*=\s*["']([^"']+)["']""",
+                tag,
+                re.IGNORECASE,
+            )
+
+            if match:
+                result = normalize_date(match.group(1))
+
+                if result:
+                    return result
+
+        # 3. Check the visible official PIB publication date.
+        clean_page = unescape(
+            re.sub(r"<[^>]+>", " ", page)
+        )
+
+        patterns = [
+            r"Posted\s*On\s*:?\s*"
+            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
+
+            r"Published\s*On\s*:?\s*"
+            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
+        ]
+
+        for pattern in patterns:
+            match = re.search(
+                pattern,
+                clean_page,
+                re.IGNORECASE,
+            )
+
+            if match:
+                result = normalize_date(match.group(1))
+
+                if result:
+                    return result
 
     except Exception as error:
-
         print(
             "Date request failed:",
             type(error).__name__,
         )
 
     return ""
-
 
 def fetch_pib_news():
 
