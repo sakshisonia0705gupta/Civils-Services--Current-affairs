@@ -97,13 +97,15 @@ def fetch_pib_news():
         )
 
        
-        pub_date = ""
-                 
-         if link:
-              pub_date =
+        
+          pub_date = ""
+
+          if link:
+            pub_date =
  get_posted_date(link)
 
-        for element in item.iter():
+          for element in item.iter():
+
             if local_name(element.tag) in {
                 "pubdate",
                 "published",
