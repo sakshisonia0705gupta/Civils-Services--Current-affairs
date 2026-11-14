@@ -23,7 +23,72 @@ LISTING_URL = (
 )
 
 
+# UPSC subject categories and relevance keywords
+UPSC_TOPICS = [
+    ("Polity & Governance", r"constitution|constitutional|supreme court|high court|judg(?:ment|ement)|bill|act\b|legislation|parliament|lok sabha|rajya sabha|election commission|cag\b|federalism|judiciary|tribunal|fundamental rights|article 21|right to information|data protection|governance|civil service|administrative reform|lokpal|anti.corruption"),
+
+    ("Economy", r"\brbi\b|reserve bank|monetary policy|inflation|\bgdp\b|fiscal|budget|\bgst\b|taxation|banking|financial inclusion|foreign investment|\bfdi\b|exports?|imports?|trade deficit|current account|manufacturing|unemployment|employment|poverty|infrastructure|disinvestment|\bsebi\b|economy|economic survey"),
+
+    ("International Relations", r"treaty|bilateral agreement|trade agreement|diplomatic|foreign policy|united nations|\bwto\b|\bg20\b|\bbrics\b|\bquad\b|indo.pacific|international cooperation|multilateral|border agreement|strategic partnership"),
+
+    ("Defence & Security", r"defen[cs]e|armed forces|military|missile|navy|air force|\barmy\b|border security|counter.terror|terrorism|cybersecurity|cyber security|internal security|coast guard|\bdrdo\b|strategic security|military exercise"),
+
+    ("Science & Technology", r"\bisro\b|space mission|satellite|launch vehicle|\bdrdo\b|artificial intelligence|\bai\b|quantum|semiconductor|biotechnology|genome|research and development|innovation|nanotechnology|nuclear energy|digital technology|supercomput"),
+
+    ("Environment", r"climate change|climate|biodiversity|wildlife|forest conservation|wetland|ramsar|pollution|renewable energy|solar energy|green hydrogen|environment|ecosystem|species|national park|tiger reserve|carbon emission|sustainab"),
+
+    ("Social Development", r"public health|healthcare|health|education|literacy|nutrition|anganwadi|women empowerment|gender|child welfare|social justice|tribal|scheduled caste|scheduled tribe|disability|sanitation|drinking water|migration"),
+
+    ("Agriculture", r"agricultur|farmer|minimum support price|\bmsp\b|crop|irrigation|food security|food processing|fertilizer|fisheries|animal husbandry|rural development"),
+
+    ("Reports & Institutions", r"national report|annual report|index\b|ranking|survey\b|census\b|committee|commission|working group|white paper|audit report|statistics|data release|human development"),
+]
+
+
+# Routine publicity announcements
+ROUTINE_PUBLICITY = re.compile(
+    r"\b(congratulates?|condoles?|pays tribute|tribute to|greets|"
+    r"extends greetings|attends|inaugurates|lays foundation stone|"
+    r"meets with|calls on|receives)\b",
+    re.IGNORECASE,
+)
+
+# Words indicating a potentially substantive development
+SUBSTANTIVE_CUES = re.compile(
+    r"\b(policy|scheme|guideline|regulation|reform|agreement|treaty|"
+    r"bill|act|judgment|verdict|report|index|mission|programme|program|"
+    r"framework|strategy|initiative|standard|rule|notification|"
+    r"investment|trade|security|conservation|climate|research|"
+    r"technology|data|rights|launches|approves|released|announces)\b",
+    re.IGNORECASE,
+)
+
+
+def classify_upsc_relevance(title):
+    """Return a UPSC category or None if no clear syllabus relevance."""
+
+    clean_title = unescape(title).strip()
+
+    matched_categories = [
+        category
+        for category, pattern in UPSC_TOPICS
+        if re.search(pattern, clean_title, re.IGNORECASE)
+    ]
+
+    if not matched_categories:
+        return None
+
+    if (
+        ROUTINE_PUBLICITY.search(clean_title)
+        and not SUBSTANTIVE_CUES.search(clean_title)
+    ):
+        return None
+
+    return matched_categories[0]
+
+
 class PIBListingParser(HTMLParser):
+
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.dates = {}
@@ -32,10 +97,11 @@ class PIBListingParser(HTMLParser):
         self.following_text = []
 
     def handle_starttag(self, tag, attrs):
+
         if tag.lower() == "a":
             self._finish_current()
-            attrs = dict(attrs)
-            href = attrs.get("href", "")
+
+            href = dict(attrs).get("href", "")
             release_id = get_release_id(href)
 
             if release_id:
@@ -44,24 +110,26 @@ class PIBListingParser(HTMLParser):
                 self.following_text = []
 
     def handle_endtag(self, tag):
+
         if tag.lower() == "a" and self.current_id:
             self.after_link = True
 
     def handle_data(self, data):
+
         if self.current_id and self.after_link:
             self.following_text.append(data)
 
     def _finish_current(self):
+
         if not self.current_id:
             return
 
         text = " ".join(self.following_text)
 
         match = re.search(
-            r"Posted\s*on\s*:?\s*"
-            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
+            r"Posted\s*on\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
             text,
-            re.IGNORECASE
+            re.IGNORECASE,
         )
 
         if match:
@@ -84,7 +152,9 @@ def local_name(tag):
 
 
 def get_text(element, names):
+
     for child in element:
+
         if local_name(child.tag) in names:
             return "".join(child.itertext()).strip()
 
@@ -92,6 +162,7 @@ def get_text(element, names):
 
 
 def normalize_date(value):
+
     if not value:
         return ""
 
@@ -100,22 +171,28 @@ def normalize_date(value):
     match = re.search(
         r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
         value,
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     if match:
+
         date_text = match.group(1).replace(",", "").strip()
 
         for fmt in ("%d %b %Y", "%d %B %Y"):
+
             try:
                 return datetime.strptime(
                     date_text, fmt
                 ).strftime("%Y-%m-%d")
+
             except ValueError:
                 pass
 
     try:
-        return parsedate_to_datetime(value).strftime("%Y-%m-%d")
+        return parsedate_to_datetime(
+            value
+        ).strftime("%Y-%m-%d")
+
     except (TypeError, ValueError, OverflowError):
         pass
 
@@ -123,13 +200,16 @@ def normalize_date(value):
         return datetime.fromisoformat(
             value.replace("Z", "+00:00")
         ).strftime("%Y-%m-%d")
+
     except ValueError:
         return ""
 
 
 def get_release_id(url):
+
     try:
         query = parse_qs(urlparse(url).query)
+
         values = query.get("PRID") or query.get("prid")
 
         if values:
@@ -141,25 +221,29 @@ def get_release_id(url):
     match = re.search(
         r"[?&]PRID=(\d+)",
         url,
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     return match.group(1) if match else ""
 
 
 def get_feed_date(item):
+
     date_fields = {
         "pubdate",
         "published",
         "updated",
         "date",
         "issued",
-        "created"
+        "created",
     }
 
     for element in item.iter():
+
         if local_name(element.tag) in date_fields:
+
             candidate = "".join(element.itertext()).strip()
+
             result = normalize_date(candidate)
 
             if result:
@@ -169,17 +253,21 @@ def get_feed_date(item):
 
 
 def get_listing_date_map():
+
     request = urllib.request.Request(
         LISTING_URL,
         headers={
             "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
-        }
+        },
     )
 
-    with urllib.request.urlopen(request, timeout=40) as response:
+    with urllib.request.urlopen(
+        request, timeout=40
+    ) as response:
+
         page = response.read().decode(
             "utf-8",
-            errors="ignore"
+            errors="ignore",
         )
 
     parser = PIBListingParser()
@@ -188,63 +276,69 @@ def get_listing_date_map():
 
     print(
         "Official PIB listing dates indexed:",
-        len(parser.dates)
+        len(parser.dates),
     )
 
     return parser.dates
 
 
 def get_posted_date(url):
+
     try:
+
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": "Mozilla/5.0"}
+            headers={"User-Agent": "Mozilla/5.0"},
         )
 
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(
+            request, timeout=20
+        ) as response:
+
             page = response.read().decode(
                 "utf-8",
-                errors="ignore"
+                errors="ignore",
             )
 
-        pattern = (
-            r"Posted\s*On\s*:?\s*"
-            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})"
-        )
-
         match = re.search(
-            pattern,
+            r"Posted\s*On\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
             unescape(page),
-            re.IGNORECASE
+            re.IGNORECASE,
         )
 
         if match:
             return normalize_date(match.group(1))
 
     except Exception as error:
+
         print(
             "Date request failed:",
-            type(error).__name__
+            type(error).__name__,
         )
 
     return ""
 
 
 def fetch_pib_news():
+
     request = urllib.request.Request(
         RSS_URL,
         headers={
             "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
-        }
+        },
     )
 
-    with urllib.request.urlopen(request, timeout=40) as response:
+    with urllib.request.urlopen(
+        request, timeout=40
+    ) as response:
+
         xml_data = response.read()
 
     root = ET.fromstring(xml_data)
 
     entries = [
-        element for element in root.iter()
+        element
+        for element in root.iter()
         if local_name(element.tag) in ("item", "entry")
     ]
 
@@ -254,21 +348,28 @@ def fetch_pib_news():
         listing_dates = get_listing_date_map()
 
     except Exception as error:
+
         print(
             "PIB listing date lookup failed:",
-            type(error).__name__
+            type(error).__name__,
         )
+
         listing_dates = {}
 
     news_items = []
+    skipped_count = 0
 
     for item in entries:
+
         title = get_text(item, {"title"})
         link = get_text(item, {"link"})
 
         if not link:
+
             for element in item:
+
                 if local_name(element.tag) == "link":
+
                     link = element.attrib.get(
                         "href", ""
                     ).strip()
@@ -279,9 +380,27 @@ def fetch_pib_news():
         if not title or not link:
             continue
 
+        clean_title = unescape(title).strip()
+
+        category = classify_upsc_relevance(
+            clean_title
+        )
+
+        if not category:
+
+            skipped_count += 1
+
+            print(
+                "Skipped (not clearly UPSC-relevant):",
+                clean_title,
+            )
+
+            continue
+
         pub_date = get_feed_date(item)
 
         if not pub_date:
+
             pub_date = listing_dates.get(
                 get_release_id(link), ""
             )
@@ -293,55 +412,63 @@ def fetch_pib_news():
             "id": link,
             "date": pub_date,
             "source": "PIB",
-            "category": "Miscellaneous",
-            "title": unescape(title).strip(),
+            "category": category,
+            "title": clean_title,
             "summary": "",
             "prelims_facts": [],
             "mains_analysis": "",
             "source_url": link,
-            "is_sample": False
+            "is_sample": False,
         })
 
+    # Protect existing news if the filter returns zero results.
     if not news_items:
+
         raise RuntimeError(
-            "No PIB articles found. Check the RSS feed."
+            "No PIB articles matched the UPSC filter. "
+            "Existing data/news.json has been left untouched."
         )
 
     output = Path("data/news.json")
+
     output.parent.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     output.write_text(
         json.dumps(
             news_items,
             ensure_ascii=False,
-            indent=2
+            indent=2,
         ),
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     dated_count = sum(
-        1 for item in news_items if item["date"]
+        1 for article in news_items if article["date"]
     )
 
     print(
-        "Successfully collected",
+        "Successfully retained",
         len(news_items),
-        "PIB articles."
+        "UPSC-relevant PIB articles.",
+    )
+
+    print(
+        "Skipped as low/unclear relevance:",
+        skipped_count,
     )
 
     print(
         "Articles with usable dates:",
-        dated_count
+        dated_count,
     )
 
-    if news_items:
-        print(
-            "Example saved date:",
-            news_items[0]["date"]
-        )
+    print(
+        "Example saved date:",
+        news_items[0]["date"],
+    )
 
 
 if __name__ == "__main__":
