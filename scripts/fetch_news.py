@@ -4,169 +4,328 @@ import re
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from datetime import datetime
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
-from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 
-RSS_URL = (
-    "https://pib.gov.in/RssMain.aspx"
-    "?ModId=6&Lang=1&Regid=3&reg=3"
-)
+# ============================================================
+# UPSC CURRENT AFFAIRS HUB — MULTI-SOURCE COLLECTOR
+# Version 1: RSS collection + archive preservation
+# ============================================================
 
-LISTING_URL = (
-    "https://www.pib.gov.in/AllRelease.aspx"
-    "?lang=1&reg=1"
-)
+OUTPUT = Path("data/news.json")
+TIMEOUT = 30
+USER_AGENT = "UPSC-Current-Affairs-Hub/1.0 (personal study)"
 
+# Only feeds listed here are automatically collected.
+# Each feed is independently handled so one failure does
+# not stop the other sources.
 
-# UPSC subject categories and relevance keywords
-UPSC_TOPICS = [
-    ("Polity & Governance", r"constitution|constitutional|supreme court|high court|judg(?:ment|ement)|bill|act\b|legislation|parliament|lok sabha|rajya sabha|election commission|cag\b|federalism|judiciary|tribunal|fundamental rights|article 21|right to information|data protection|governance|civil service|administrative reform|lokpal|anti.corruption"),
-
-    ("Economy", r"\brbi\b|reserve bank|monetary policy|inflation|\bgdp\b|fiscal|budget|\bgst\b|taxation|banking|financial inclusion|foreign investment|\bfdi\b|exports?|imports?|trade deficit|current account|manufacturing|unemployment|employment|poverty|infrastructure|disinvestment|\bsebi\b|economy|economic survey"),
-
-    ("International Relations", r"treaty|bilateral agreement|trade agreement|diplomatic|foreign policy|united nations|\bwto\b|\bg20\b|\bbrics\b|\bquad\b|indo.pacific|international cooperation|multilateral|border agreement|strategic partnership"),
-
-    ("Defence & Security", r"defen[cs]e|armed forces|military|missile|navy|air force|\barmy\b|border security|counter.terror|terrorism|cybersecurity|cyber security|internal security|coast guard|\bdrdo\b|strategic security|military exercise"),
-
-    ("Science & Technology", r"\bisro\b|space mission|satellite|launch vehicle|\bdrdo\b|artificial intelligence|\bai\b|quantum|semiconductor|biotechnology|genome|research and development|innovation|nanotechnology|nuclear energy|digital technology|supercomput"),
-
-    ("Environment", r"climate change|climate|biodiversity|wildlife|forest conservation|wetland|ramsar|pollution|renewable energy|solar energy|green hydrogen|environment|ecosystem|species|national park|tiger reserve|carbon emission|sustainab"),
-
-    ("Social Development", r"public health|healthcare|health|education|literacy|nutrition|anganwadi|women empowerment|gender|child welfare|social justice|tribal|scheduled caste|scheduled tribe|disability|sanitation|drinking water|migration"),
-
-    ("Agriculture", r"agricultur|farmer|minimum support price|\bmsp\b|crop|irrigation|food security|food processing|fertilizer|fisheries|animal husbandry|rural development"),
-
-    ("Reports & Institutions", r"national report|annual report|index\b|ranking|survey\b|census\b|committee|commission|working group|white paper|audit report|statistics|data release|human development"),
+RSS_SOURCES = [
+    {
+        "name": "PIB",
+        "url": (
+            "https://pib.gov.in/RssMain.aspx"
+            "?ModId=6&Lang=1&Regid=1"
+        ),
+    },
+    {
+        "name": "The Hindu",
+        "url": (
+            "http://www.thehindu.com/news/national/"
+            "?service=rss"
+        ),
+    },
+    {
+        "name": "Indian Express - UPSC",
+        "url": (
+            "https://indianexpress.com/section/"
+            "upsc-current-affairs/feed/"
+        ),
+    },
+    {
+        "name": "Indian Express - Economy",
+        "url": (
+            "https://indianexpress.com/section/"
+            "business/economy/feed/"
+        ),
+    },
+    {
+        "name": "Indian Express - Explained",
+        "url": (
+            "https://indianexpress.com/section/"
+            "explained/feed/"
+        ),
+    },
+    {
+        "name": "RBI - Press Releases",
+        "url": "https://rbi.org.in/pressreleases_rss.xml",
+    },
+    {
+        "name": "RBI - Notifications",
+        "url": "https://rbi.org.in/notifications_rss.xml",
+    },
+    {
+        "name": "RBI - Speeches",
+        "url": "https://rbi.org.in/speeches_rss.xml",
+    },
 ]
 
 
-# Routine publicity announcements
-ROUTINE_PUBLICITY = re.compile(
-    r"\b(congratulates?|condoles?|pays tribute|tribute to|greets|"
-    r"extends greetings|attends|inaugurates|lays foundation stone|"
-    r"meets with|calls on|receives)\b",
-    re.IGNORECASE,
-)
+# These are important sources, but they are not yet
+# connected to an automatically verified article feed.
+# Do not treat this list as proof of automatic collection.
 
-# Words indicating a potentially substantive development
-SUBSTANTIVE_CUES = re.compile(
-    r"\b(policy|scheme|guideline|regulation|reform|agreement|treaty|"
-    r"bill|act|judgment|verdict|report|index|mission|programme|program|"
-    r"framework|strategy|initiative|standard|rule|notification|"
-    r"investment|trade|security|conservation|climate|research|"
-    r"technology|data|rights|launches|approves|released|announces)\b",
-    re.IGNORECASE,
-)
-
-
-def classify_upsc_relevance(title):
-    """Return a UPSC category or None if no clear syllabus relevance."""
-
-    clean_title = unescape(title).strip()
-
-    matched_categories = [
-        category
-        for category, pattern in UPSC_TOPICS
-        if re.search(pattern, clean_title, re.IGNORECASE)
-    ]
-
-    if not matched_categories:
-        return None
-
-    if (
-        ROUTINE_PUBLICITY.search(clean_title)
-        and not SUBSTANTIVE_CUES.search(clean_title)
-    ):
-        return None
-
-    return matched_categories[0]
-
-
-class PIBListingParser(HTMLParser):
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.dates = {}
-        self.current_id = ""
-        self.after_link = False
-        self.following_text = []
-
-    def handle_starttag(self, tag, attrs):
-
-        if tag.lower() == "a":
-            self._finish_current()
-
-            href = dict(attrs).get("href", "")
-            release_id = get_release_id(href)
-
-            if release_id:
-                self.current_id = release_id
-                self.after_link = False
-                self.following_text = []
-
-    def handle_endtag(self, tag):
-
-        if tag.lower() == "a" and self.current_id:
-            self.after_link = True
-
-    def handle_data(self, data):
-
-        if self.current_id and self.after_link:
-            self.following_text.append(data)
-
-    def _finish_current(self):
-
-        if not self.current_id:
-            return
-
-        text = " ".join(self.following_text)
-
-        match = re.search(
-            r"Posted\s*on\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
-            text,
-            re.IGNORECASE,
-        )
-
-        if match:
-            date_value = normalize_date(match.group(1))
-
-            if date_value:
-                self.dates[self.current_id] = date_value
-
-        self.current_id = ""
-        self.after_link = False
-        self.following_text = []
-
-    def close(self):
-        super().close()
-        self._finish_current()
+SOURCE_DIRECTORY = [
+    {
+        "name": "Economic Times",
+        "type": "Newspaper",
+        "url": "https://economictimes.indiatimes.com/",
+        "status": "Manual source review - RSS reuse restricted",
+    },
+    {
+        "name": "PRS India",
+        "type": "Legislative research",
+        "url": "https://prsindia.org/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "Ministry of External Affairs",
+        "type": "Government",
+        "url": "https://www.mea.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "DRDO",
+        "type": "Science and Defence",
+        "url": "https://www.drdo.gov.in/",
+        "status": "Official publication connector pending",
+    },
+    {
+        "name": "ISRO",
+        "type": "Science and Space",
+        "url": "https://www.isro.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "Yojana",
+        "type": "Government magazine",
+        "url": "https://yojana.gov.in/",
+        "status": "Magazine issue connector pending",
+    },
+    {
+        "name": "Kurukshetra",
+        "type": "Government magazine",
+        "url": "https://yojana.gov.in/",
+        "status": "Magazine issue connector pending",
+    },
+    {
+        "name": "Down To Earth",
+        "type": "Fortnightly magazine",
+        "url": "https://www.downtoearth.org.in/",
+        "status": "Magazine issue connector pending",
+    },
+    {
+        "name": "Ministry of Environment",
+        "type": "Government",
+        "url": "https://moef.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "NITI Aayog",
+        "type": "Government institution",
+        "url": "https://www.niti.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "SEBI",
+        "type": "Financial regulator",
+        "url": "https://www.sebi.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "ICAR",
+        "type": "Agriculture research",
+        "url": "https://icar.org.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "Ministry of Finance",
+        "type": "Government",
+        "url": "https://finmin.gov.in/",
+        "status": "Official website connector pending",
+    },
+    {
+        "name": "Ministry of Defence",
+        "type": "Government",
+        "url": "https://mod.gov.in/",
+        "status": "Official website connector pending",
+    },
+]
 
 
-def local_name(tag):
-    return tag.rsplit("}", 1)[-1].lower()
+# ============================================================
+# UPSC CLASSIFICATION
+# ============================================================
+
+TOPICS = [
+    (
+        "Polity & Governance",
+        r"constitution|constitutional|supreme court|high court|"
+        r"judg(?:ment|ement)|bill|legislation|parliament|"
+        r"lok sabha|rajya sabha|election commission|cag\b|"
+        r"federalism|judiciary|tribunal|fundamental rights|"
+        r"article 21|right to information|data protection|"
+        r"governance|civil service|lokpal|administrative reform",
+    ),
+    (
+        "Economy",
+        r"\brbi\b|reserve bank|monetary policy|inflation|"
+        r"\bgdp\b|fiscal|budget|\bgst\b|taxation|banking|"
+        r"financial inclusion|foreign investment|\bfdi\b|"
+        r"exports?|imports?|trade deficit|manufacturing|"
+        r"employment|poverty|infrastructure|disinvestment|"
+        r"\bsebi\b|economy|economic survey|currency",
+    ),
+    (
+        "International Relations",
+        r"treaty|bilateral|diplomatic|foreign policy|"
+        r"united nations|\bwto\b|\bg20\b|\bbrics\b|"
+        r"\bquad\b|indo.pacific|international cooperation|"
+        r"multilateral|strategic partnership|summit|"
+        r"foreign minister|international agreement",
+    ),
+    (
+        "Defence & Security",
+        r"defen[cs]e|armed forces|military|missile|"
+        r"navy|air force|\barmy\b|border security|"
+        r"cybersecurity|cyber security|internal security|"
+        r"coast guard|\bdrdo\b|military exercise|"
+        r"defence production",
+    ),
+    (
+        "Science & Technology",
+        r"\bisro\b|space mission|satellite|launch vehicle|"
+        r"artificial intelligence|\bai\b|quantum|"
+        r"semiconductor|biotechnology|genome|research|"
+        r"innovation|nanotechnology|nuclear energy|"
+        r"digital technology|supercomput|robotics",
+    ),
+    (
+        "Environment",
+        r"climate change|climate|biodiversity|wildlife|"
+        r"forest conservation|wetland|ramsar|pollution|"
+        r"renewable energy|solar energy|green hydrogen|"
+        r"environment|ecosystem|species|national park|"
+        r"tiger reserve|carbon emission|sustainab|"
+        r"disaster management",
+    ),
+    (
+        "Social Development",
+        r"public health|healthcare|health|education|"
+        r"literacy|nutrition|anganwadi|women empowerment|"
+        r"gender|child welfare|social justice|tribal|"
+        r"scheduled caste|scheduled tribe|disability|"
+        r"sanitation|drinking water|migration|poverty",
+    ),
+    (
+        "Agriculture",
+        r"agricultur|farmer|minimum support price|\bmsp\b|"
+        r"crop|irrigation|food security|food processing|"
+        r"fertilizer|fisheries|animal husbandry|"
+        r"rural development|agri.?stack",
+    ),
+    (
+        "Reports & Institutions",
+        r"national report|annual report|index\b|ranking|"
+        r"survey\b|census\b|committee|commission|"
+        r"working group|white paper|audit report|"
+        r"statistics|data release|human development",
+    ),
+    (
+        "Art, Culture & Heritage",
+        r"heritage|archaeolog|unesco|museum|festival|"
+        r"traditional craft|handicraft|artisan|"
+        r"cultural diplomacy|intangible cultural|"
+        r"literature|classical language|monument",
+    ),
+]
 
 
-def get_text(element, names):
+def classify_article(title, description=""):
 
-    for child in element:
+    text = unescape(
+        (title or "") + " " + (description or "")
+    ).lower()
 
-        if local_name(child.tag) in names:
-            return "".join(child.itertext()).strip()
+    for category, pattern in TOPICS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return category
 
-    return ""
+    return "General Current Affairs"
 
+
+def assess_priority(title, description=""):
+
+    text = (
+        (title or "") + " " + (description or "")
+    ).lower()
+
+    high_cues = re.compile(
+        r"supreme court|constitutional|union budget|"
+        r"monetary policy|major reform|new act|"
+        r"international treaty|national security|"
+        r"major mission|climate agreement|"
+        r"national policy|important judgment",
+        re.IGNORECASE,
+    )
+
+    medium_cues = re.compile(
+        r"report|index|scheme|programme|program|"
+        r"notification|research|agreement|"
+        r"international|technology|conservation|"
+        r"agriculture|health|education|"
+        r"committee|institution|heritage|"
+        r"artisan|trade|development|"
+        r"appointment|exercise|summit",
+        re.IGNORECASE,
+    )
+
+    if high_cues.search(text):
+        return "High", "Strong policy, constitutional or national significance."
+
+    if medium_cues.search(text):
+        return "Medium", "Potential syllabus connection; review its UPSC value."
+
+    return "Low", "Retained for review; UPSC relevance needs assessment."
+
+
+# ============================================================
+# DATE HANDLING
+# ============================================================
 
 def normalize_date(value):
 
     if not value:
         return ""
 
-    value = unescape(value).strip()
+    value = unescape(str(value)).strip()
+
+    try:
+        parsed = parsedate_to_datetime(value)
+        return parsed.date().isoformat()
+    except (TypeError, ValueError, OverflowError):
+        pass
+
+    try:
+        return datetime.fromisoformat(
+            value.replace("Z", "+00:00")
+        ).date().isoformat()
+    except ValueError:
+        pass
 
     match = re.search(
         r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
@@ -175,61 +334,22 @@ def normalize_date(value):
     )
 
     if match:
-
-        date_text = match.group(1).replace(",", "").strip()
+        clean = match.group(1).replace(",", "").strip()
 
         for fmt in ("%d %b %Y", "%d %B %Y"):
-
             try:
                 return datetime.strptime(
-                    date_text, fmt
-                ).strftime("%Y-%m-%d")
-
+                    clean, fmt
+                ).date().isoformat()
             except ValueError:
                 pass
 
-    try:
-        return parsedate_to_datetime(
-            value
-        ).strftime("%Y-%m-%d")
-
-    except (TypeError, ValueError, OverflowError):
-        pass
-
-    try:
-        return datetime.fromisoformat(
-            value.replace("Z", "+00:00")
-        ).strftime("%Y-%m-%d")
-
-    except ValueError:
-        return ""
+    return ""
 
 
-def get_release_id(url):
+def get_entry_date(entry):
 
-    try:
-        query = parse_qs(urlparse(url).query)
-
-        values = query.get("PRID") or query.get("prid")
-
-        if values:
-            return values[0]
-
-    except Exception:
-        pass
-
-    match = re.search(
-        r"[?&]PRID=(\d+)",
-        url,
-        re.IGNORECASE,
-    )
-
-    return match.group(1) if match else ""
-
-
-def get_feed_date(item):
-
-    date_fields = {
+    date_names = {
         "pubdate",
         "published",
         "updated",
@@ -238,13 +358,14 @@ def get_feed_date(item):
         "created",
     }
 
-    for element in item.iter():
+    for element in entry.iter():
 
-        if local_name(element.tag) in date_fields:
+        name = element.tag.rsplit("}", 1)[-1].lower()
 
-            candidate = "".join(element.itertext()).strip()
-
-            result = normalize_date(candidate)
+        if name in date_names:
+            result = normalize_date(
+                "".join(element.itertext())
+            )
 
             if result:
                 return result
@@ -252,319 +373,262 @@ def get_feed_date(item):
     return ""
 
 
-def get_listing_date_map():
+# ============================================================
+# RSS PARSING
+# ============================================================
+
+def fetch_url(url):
 
     request = urllib.request.Request(
-        LISTING_URL,
-        headers={
-            "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
-        },
+        url,
+        headers={"User-Agent": USER_AGENT},
     )
 
     with urllib.request.urlopen(
-        request, timeout=40
+        request, timeout=TIMEOUT
     ) as response:
 
-        page = response.read().decode(
-            "utf-8",
-            errors="ignore",
-        )
-
-    parser = PIBListingParser()
-    parser.feed(page)
-    parser.close()
-
-    print(
-        "Official PIB listing dates indexed:",
-        len(parser.dates),
-    )
-
-    return parser.dates
+        return response.read()
 
 
+def get_entry_link(entry):
 
-def get_posted_date(url):
+    for element in entry.iter():
 
-    try:
-        request = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
+        if element.tag.rsplit("}", 1)[-1].lower() == "link":
 
-        with urllib.request.urlopen(
-            request, timeout=25
-        ) as response:
-            page = response.read().decode(
-                "utf-8",
-                errors="ignore",
-            )
+            href = element.attrib.get("href", "").strip()
 
-        # 1. Check official publication-date metadata.
-        meta_tags = re.findall(
-            r"<meta\b[^>]*>",
-            page,
-            re.IGNORECASE,
-        )
+            if href:
+                return href
 
-        accepted_names = {
-            "article:published_time",
-            "datepublished",
-            "dc.date",
-            "date",
-            "pubdate",
-        }
+            text = "".join(element.itertext()).strip()
 
-        for tag in meta_tags:
-            attrs = dict(
-                re.findall(
-                    r"""([\w:-]+)\s*=\s*["']([^"']*)["']""",
-                    tag,
-                    re.IGNORECASE,
-                )
-            )
-
-            name = (
-                attrs.get("property")
-                or attrs.get("name")
-                or attrs.get("itemprop")
-                or ""
-            ).lower()
-
-            if name in accepted_names:
-                result = normalize_date(
-                    attrs.get("content", "")
-                )
-
-                if result:
-                    return result
-
-        # 2. Check HTML time elements.
-        time_tags = re.findall(
-            r"<time\b[^>]*>",
-            page,
-            re.IGNORECASE,
-        )
-
-        for tag in time_tags:
-            match = re.search(
-                r"""datetime\s*=\s*["']([^"']+)["']""",
-                tag,
-                re.IGNORECASE,
-            )
-
-            if match:
-                result = normalize_date(match.group(1))
-
-                if result:
-                    return result
-
-        # 3. Check the visible official PIB publication date.
-        clean_page = unescape(
-            re.sub(r"<[^>]+>", " ", page)
-        )
-
-        patterns = [
-            r"Posted\s*On\s*:?\s*"
-            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
-
-            r"Published\s*On\s*:?\s*"
-            r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
-        ]
-
-        for pattern in patterns:
-            match = re.search(
-                pattern,
-                clean_page,
-                re.IGNORECASE,
-            )
-
-            if match:
-                result = normalize_date(match.group(1))
-
-                if result:
-                    return result
-
-    except Exception as error:
-        print(
-            "Date request failed:",
-            type(error).__name__,
-        )
+            if text:
+                return text
 
     return ""
 
-def fetch_pib_news():
 
-    request = urllib.request.Request(
-        RSS_URL,
-        headers={
-            "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
-        },
-    )
+def get_entry_text(entry, names):
 
-    with urllib.request.urlopen(
-        request, timeout=40
-    ) as response:
+    for element in entry.iter():
 
-        xml_data = response.read()
+        name = element.tag.rsplit("}", 1)[-1].lower()
 
-    root = ET.fromstring(xml_data)
+        if name in names:
+            return "".join(element.itertext()).strip()
 
-    entries = [
-        element
-        for element in root.iter()
-        if local_name(element.tag) in ("item", "entry")
-    ]
+    return ""
 
-    print("Feed entries found:", len(entries))
+
+def collect_feed(source):
+
+    results = []
 
     try:
-        listing_dates = get_listing_date_map()
+        xml_data = fetch_url(source["url"])
+        root = ET.fromstring(xml_data)
+
+        entries = [
+            element
+            for element in root.iter()
+            if element.tag.rsplit("}", 1)[-1].lower()
+            in ("item", "entry")
+        ]
+
+        for entry in entries:
+
+            title = get_entry_text(entry, {"title"})
+            link = get_entry_link(entry)
+
+            if not title or not link:
+                continue
+
+            title = unescape(title).strip()
+
+            description = get_entry_text(
+                entry,
+                {"description", "summary", "content"},
+            )
+
+            date_value = get_entry_date(entry)
+
+            priority, reason = assess_priority(
+                title, description
+            )
+
+            results.append({
+                "id": link,
+                "date": date_value,
+                "source": source["name"],
+                "category": classify_article(
+                    title, description
+                ),
+                "title": title,
+                "summary": "",
+                "prelims_facts": [],
+                "mains_analysis": "",
+                "upsc_angle": {},
+                "priority": priority,
+                "priority_reason": reason,
+                "source_url": link,
+                "is_sample": False,
+            })
+
+        print(
+            source["name"] + ":",
+            len(results),
+            "feed entries collected",
+        )
 
     except Exception as error:
 
         print(
-            "PIB listing date lookup failed:",
+            source["name"] + " FAILED:",
             type(error).__name__,
+            str(error)[:180],
         )
 
-        listing_dates = {}
+    return results
 
-    news_items = []
-    skipped_count = 0
 
-    for item in entries:
+# ============================================================
+# SAFE ARCHIVE MERGE
+# ============================================================
 
-        title = get_text(item, {"title"})
-        link = get_text(item, {"link"})
+def load_existing_archive():
 
-        if not link:
+    if not OUTPUT.exists():
+        return []
 
-            for element in item:
-
-                if local_name(element.tag) == "link":
-
-                    link = element.attrib.get(
-                        "href", ""
-                    ).strip()
-
-                    if link:
-                        break
-
-        if not title or not link:
-            continue
-
-        clean_title = unescape(title).strip()
-
-        category = classify_upsc_relevance(
-            clean_title
+    try:
+        data = json.loads(
+            OUTPUT.read_text(encoding="utf-8")
         )
 
-        if not category:
+        if not isinstance(data, list):
+            raise ValueError("Archive is not a list.")
 
-            skipped_count += 1
+        return data
 
-            print(
-                "Skipped (not clearly UPSC-relevant):",
-                clean_title,
-            )
+    except Exception as error:
 
-            continue
-
-        pub_date = get_feed_date(item)
-
-        if not pub_date:
-
-            pub_date = listing_dates.get(
-                get_release_id(link), ""
-            )
-
-        if not pub_date:
-            pub_date = get_posted_date(link)
-
-        news_items.append({
-            "id": link,
-            "date": pub_date,
-            "source": "PIB",
-            "category": category,
-            "title": clean_title,
-            "summary": "",
-            "prelims_facts": [],
-            "mains_analysis": "",
-            "source_url": link,
-            "is_sample": False,
-        })
-
-    
-    # Protect existing news if the filter returns zero results.
-    if not news_items:
         raise RuntimeError(
-            "No PIB articles matched the UPSC filter. "
-            "Existing data/news.json has been left untouched."
+            "Existing news archive could not be read. "
+            "Nothing has been overwritten."
+        ) from error
+
+
+def merge_archive(existing_items, new_items):
+
+    merged = {}
+
+    for article in existing_items:
+
+        if not isinstance(article, dict):
+            continue
+
+        key = (
+            article.get("source_url")
+            or article.get("id")
         )
 
-    output = Path("data/news.json")
-    output.parent.mkdir(parents=True, exist_ok=True)
+        if key:
+            merged[key] = article
 
-    # Load the existing archive.
-    existing_items = []
+    added = 0
+    refreshed = 0
 
-    if output.exists():
-        try:
-            existing_items = json.loads(
-                output.read_text(encoding="utf-8")
-            )
+    for article in new_items:
 
-            if not isinstance(existing_items, list):
-                raise ValueError("News archive is not a list.")
+        key = (
+            article.get("source_url")
+            or article.get("id")
+        )
 
-        except (json.JSONDecodeError, ValueError) as error:
-            raise RuntimeError(
-                "Existing news archive could not be read safely. "
-                "No changes were made."
-            ) from error
+        if not key:
+            continue
 
-    # Merge old and new articles using their source URL as the unique ID.
-    merged = {
-        article.get("source_url") or article.get("id"): article
-        for article in existing_items
-        if isinstance(article, dict)
-        and (article.get("source_url") or article.get("id"))
-    }
+        if key not in merged:
 
-    added_count = 0
-    updated_count = 0
+            merged[key] = article
+            added += 1
+            continue
 
-    for article in news_items:
-        article_id = article["source_url"]
+        old = merged[key]
 
-        if article_id in merged:
-            # Preserve existing notes and any enriched fields.
-            old_article = merged[article_id]
+        # Update source metadata, but never erase
+        # notes that have already been written.
 
-            for key, value in article.items():
-                if key in ("summary", "prelims_facts", "mains_analysis"):
-                    if old_article.get(key):
-                        continue
+        protected_fields = {
+            "summary",
+            "prelims_facts",
+            "mains_analysis",
+            "upsc_angle",
+        }
 
-                if key == "upsc_angle" and old_article.get(key):
-                    continue
+        for field, value in article.items():
 
-                old_article[key] = value
+            if field in protected_fields and old.get(field):
+                continue
 
-            updated_count += 1
+            old[field] = value
 
-        else:
-            merged[article_id] = article
-            added_count += 1
+        refreshed += 1
 
-    # Keep newest articles first.
     archive = sorted(
         merged.values(),
-        key=lambda article: article.get("date") or "",
+        key=lambda item: item.get("date") or "",
         reverse=True,
     )
 
-    output.write_text(
+    return archive, added, refreshed
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    print("=" * 55)
+    print("UPSC MULTI-SOURCE NEWS COLLECTION")
+    print("=" * 55)
+
+    all_new_items = []
+    source_success = 0
+
+    for source in RSS_SOURCES:
+
+        items = collect_feed(source)
+
+        if items or source["name"] == "PIB":
+            source_success += 1
+
+        all_new_items.extend(items)
+
+    # Do not destroy the existing archive if every feed fails.
+    if not all_new_items:
+
+        raise RuntimeError(
+            "No articles were collected from any feed. "
+            "Existing archive remains untouched."
+        )
+
+    existing = load_existing_archive()
+
+    archive, added, refreshed = merge_archive(
+        existing,
+        all_new_items,
+    )
+
+    OUTPUT.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    OUTPUT.write_text(
         json.dumps(
             archive,
             ensure_ascii=False,
@@ -573,16 +637,68 @@ def fetch_pib_news():
         encoding="utf-8",
     )
 
-    dated_count = sum(
-        1 for article in archive if article.get("date")
+    dated = sum(
+        1 for item in archive if item.get("date")
     )
 
-    print("New articles added:", added_count)
-    print("Existing articles refreshed:", updated_count)
-    print("Total articles in archive:", len(archive))
-    print("Articles with usable dates:", dated_count)
+    undated = [
+        item.get("title", "Untitled")
+        for item in archive
+        if not item.get("date")
+    ]
+
+    source_counts = {}
+
+    for item in archive:
+
+        name = item.get("source", "Unknown")
+
+        source_counts[name] = (
+            source_counts.get(name, 0) + 1
+        )
+
+    print()
+    print("=" * 55)
+    print("COLLECTION REPORT")
+    print("=" * 55)
+
+    print("Feed sources configured:", len(RSS_SOURCES))
+    print("Articles received:", len(all_new_items))
+    print("New articles added:", added)
+    print("Existing articles refreshed:", refreshed)
+    print("Total archive articles:", len(archive))
+    print("Articles with dates:", dated)
+    print("Articles without dates:", len(undated))
+
+    print()
+    print("ARTICLES BY SOURCE:")
+
+    for name, count in sorted(source_counts.items()):
+        print(name + ":", count)
+
+    if undated:
+
+        print()
+        print("ARTICLES NEEDING DATE REVIEW:")
+
+        for title in undated[:30]:
+            print("-", title)
+
+    print()
+    print("IMPORTANT SOURCES STILL AWAITING CONNECTORS:")
+
+    for source in SOURCE_DIRECTORY:
+        print(
+            "-",
+            source["name"],
+            "|",
+            source["status"],
+        )
+
+    print()
     print("Archive saved successfully.")
+    print("Existing notes and older articles were preserved.")
 
 
 if __name__ == "__main__":
-    fetch_pib_news()
+    main()
