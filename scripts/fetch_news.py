@@ -11,14 +11,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
- RSS_URL = (
+
+RSS_URL = (
     "https://pib.gov.in/RssMain.aspx"
-     "?ModId=6&Lang=1&Regid=3&reg=3"
- )              
-     
- LISTING_URL = (
-    
-  "https://www.pib.gov.in/AllRelease.aspx"
+    "?ModId=6&Lang=1&Regid=3&reg=3"
+)
+
+LISTING_URL = (
+    "https://www.pib.gov.in/AllRelease.aspx"
     "?lang=1&reg=1"
 )
 
@@ -56,6 +56,7 @@ class PIBListingParser(HTMLParser):
             return
 
         text = " ".join(self.following_text)
+
         match = re.search(
             r"Posted\s*on\s*:?\s*"
             r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})",
@@ -65,6 +66,7 @@ class PIBListingParser(HTMLParser):
 
         if match:
             date_value = normalize_date(match.group(1))
+
             if date_value:
                 self.dates[self.current_id] = date_value
 
@@ -85,6 +87,7 @@ def get_text(element, names):
     for child in element:
         if local_name(child.tag) in names:
             return "".join(child.itertext()).strip()
+
     return ""
 
 
@@ -131,17 +134,27 @@ def get_release_id(url):
 
         if values:
             return values[0]
+
     except Exception:
         pass
 
-    match = re.search(r"[?&]PRID=(\d+)", url, re.IGNORECASE)
+    match = re.search(
+        r"[?&]PRID=(\d+)",
+        url,
+        re.IGNORECASE
+    )
+
     return match.group(1) if match else ""
 
 
 def get_feed_date(item):
     date_fields = {
-        "pubdate", "published", "updated",
-        "date", "issued", "created"
+        "pubdate",
+        "published",
+        "updated",
+        "date",
+        "issued",
+        "created"
     }
 
     for element in item.iter():
@@ -158,17 +171,26 @@ def get_feed_date(item):
 def get_listing_date_map():
     request = urllib.request.Request(
         LISTING_URL,
-        headers={"User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"}
+        headers={
+            "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
+        }
     )
 
     with urllib.request.urlopen(request, timeout=40) as response:
-        page = response.read().decode("utf-8", errors="ignore")
+        page = response.read().decode(
+            "utf-8",
+            errors="ignore"
+        )
 
     parser = PIBListingParser()
     parser.feed(page)
     parser.close()
 
-    print("Official PIB listing dates indexed:", len(parser.dates))
+    print(
+        "Official PIB listing dates indexed:",
+        len(parser.dates)
+    )
+
     return parser.dates
 
 
@@ -180,20 +202,30 @@ def get_posted_date(url):
         )
 
         with urllib.request.urlopen(request, timeout=20) as response:
-            page = response.read().decode("utf-8", errors="ignore")
+            page = response.read().decode(
+                "utf-8",
+                errors="ignore"
+            )
 
         pattern = (
             r"Posted\s*On\s*:?\s*"
             r"(\d{1,2}\s+[A-Za-z]{3,9}\s*,?\s+\d{4})"
         )
 
-        match = re.search(pattern, unescape(page), re.IGNORECASE)
+        match = re.search(
+            pattern,
+            unescape(page),
+            re.IGNORECASE
+        )
 
         if match:
             return normalize_date(match.group(1))
 
     except Exception as error:
-        print("Date request failed:", type(error).__name__)
+        print(
+            "Date request failed:",
+            type(error).__name__
+        )
 
     return ""
 
@@ -201,7 +233,9 @@ def get_posted_date(url):
 def fetch_pib_news():
     request = urllib.request.Request(
         RSS_URL,
-        headers={"User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"}
+        headers={
+            "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub"
+        }
     )
 
     with urllib.request.urlopen(request, timeout=40) as response:
@@ -218,8 +252,12 @@ def fetch_pib_news():
 
     try:
         listing_dates = get_listing_date_map()
+
     except Exception as error:
-        print("PIB listing date lookup failed:", type(error).__name__)
+        print(
+            "PIB listing date lookup failed:",
+            type(error).__name__
+        )
         listing_dates = {}
 
     news_items = []
@@ -231,7 +269,9 @@ def fetch_pib_news():
         if not link:
             for element in item:
                 if local_name(element.tag) == "link":
-                    link = element.attrib.get("href", "").strip()
+                    link = element.attrib.get(
+                        "href", ""
+                    ).strip()
 
                     if link:
                         break
@@ -242,7 +282,9 @@ def fetch_pib_news():
         pub_date = get_feed_date(item)
 
         if not pub_date:
-            pub_date = listing_dates.get(get_release_id(link), "")
+            pub_date = listing_dates.get(
+                get_release_id(link), ""
+            )
 
         if not pub_date:
             pub_date = get_posted_date(link)
@@ -266,10 +308,17 @@ def fetch_pib_news():
         )
 
     output = Path("data/news.json")
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     output.write_text(
-        json.dumps(news_items, ensure_ascii=False, indent=2),
+        json.dumps(
+            news_items,
+            ensure_ascii=False,
+            indent=2
+        ),
         encoding="utf-8"
     )
 
@@ -277,11 +326,22 @@ def fetch_pib_news():
         1 for item in news_items if item["date"]
     )
 
-    print("Successfully collected", len(news_items), "PIB articles.")
-    print("Articles with usable dates:", dated_count)
+    print(
+        "Successfully collected",
+        len(news_items),
+        "PIB articles."
+    )
+
+    print(
+        "Articles with usable dates:",
+        dated_count
+    )
 
     if news_items:
-        print("Example saved date:", news_items[0]["date"])
+        print(
+            "Example saved date:",
+            news_items[0]["date"]
+        )
 
 
 if __name__ == "__main__":
