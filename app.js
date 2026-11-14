@@ -23,6 +23,35 @@ function escapeHTML(value) {
   return div.innerHTML;
 }
 
+function getLocalDate(value) {
+  if (!value) return null;
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3])
+    );
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDate(value) {
+  const date = getLocalDate(value);
+
+  if (!date) return "Date pending";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+}
+
 function showSubjects() {
   content.innerHTML = `
     <h3>UPSC Subject Library</h3>
@@ -120,59 +149,85 @@ function showFeature(page) {
   }
 }
 
+function renderArticle(item) {
+  return `
+    <article class="news-item">
+      <h4>${escapeHTML(item.title)}</h4>
+      <p><strong>Date:</strong> ${formatDate(item.date)}</p>
+      <p><strong>Source:</strong> ${escapeHTML(item.source || "Unknown")}</p>
+      <p><strong>Subject:</strong> ${escapeHTML(item.category || "Miscellaneous")}</p>
+
+      ${item.summary
+        ? `<p>${escapeHTML(item.summary)}</p>`
+        : ""}
+
+      ${item.source_url
+        ? `<a href="${escapeHTML(item.source_url)}"
+             target="_blank" rel="noopener noreferrer">
+             Read original article
+           </a>`
+        : ""}
+    </article>
+  `;
+}
+
 function renderNews(section = "daily") {
   if (!currentAffairs) return;
 
-  let filtered = [...newsItems];
+  const dated = newsItems.filter(item => getLocalDate(item.date));
+  const undated = newsItems.filter(item => !getLocalDate(item.date));
+
+  const now = new Date();
+  const today = new Date(
+    now.getFullYear(), now.getMonth(), now.getDate()
+  );
+
+  let filtered = [...dated];
 
   if (section === "daily") {
-    const today = new Date().toDateString();
-    filtered = filtered.filter(item =>
-      item.date && !Number.isNaN(Date.parse(item.date)) &&
-      new Date(item.date).toDateString() === today
-    );
+    filtered = dated.filter(item => {
+      const date = getLocalDate(item.date);
+      return date.toDateString() === today.toDateString();
+    });
   } else if (section === "weekly") {
-    const now = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(now.getDate() - 7);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
 
-    filtered = filtered.filter(item => {
-      if (!item.date || Number.isNaN(Date.parse(item.date))) return false;
-      const date = new Date(item.date);
+    filtered = dated.filter(item => {
+      const date = getLocalDate(item.date);
       return date >= weekAgo && date <= now;
     });
   } else if (section === "monthly") {
-    const now = new Date();
-    filtered = filtered.filter(item => {
-      if (!item.date || Number.isNaN(Date.parse(item.date))) return false;
-      const date = new Date(item.date);
+    filtered = dated.filter(item => {
+      const date = getLocalDate(item.date);
       return date.getMonth() === now.getMonth() &&
         date.getFullYear() === now.getFullYear();
     });
   }
 
-  const heading = section.charAt(0).toUpperCase() + section.slice(1);
+  const heading =
+    section.charAt(0).toUpperCase() + section.slice(1);
 
   currentAffairs.innerHTML = `
     <h3>${heading} Current Affairs</h3>
-    <p>News collected: ${filtered.length}</p>
-    ${filtered.length ? filtered.map(item => `
-      <article class="news-item">
-        <h4>${escapeHTML(item.title)}</h4>
-        <p><strong>Source:</strong> ${escapeHTML(item.source || "Unknown")}</p>
-        <p><strong>Subject:</strong> ${escapeHTML(item.category || "Miscellaneous")}</p>
-        ${item.summary ? `<p>${escapeHTML(item.summary)}</p>` : ""}
-        ${item.source_url ? `
-          <a href="${escapeHTML(item.source_url)}"
-             target="_blank" rel="noopener noreferrer">
-            Read original article
-          </a>
-        ` : ""}
-      </article>
-    `).join("") : `
-      <p>No dated articles are available in this section yet.</p>
-      <p>New articles will appear here when the news feed provides usable dates.</p>
-    `}
+
+    <p>Dated articles: ${filtered.length}</p>
+
+    ${filtered.length
+      ? filtered.map(renderArticle).join("")
+      : "<p>No dated articles available in this period yet.</p>"
+    }
+
+    <hr>
+
+    <h3>Recently Collected — Date Pending</h3>
+    <p>These articles have been collected, but their publication dates are not yet available.</p>
+    <p>Articles awaiting dates: ${undated.length}</p>
+
+    ${undated.length
+      ? undated.map(renderArticle).join("")
+      : "<p>No articles are waiting for dates.</p>"
+    }
   `;
 }
 
