@@ -149,27 +149,84 @@ function showFeature(page) {
   }
 }
 
+
 function renderArticle(item) {
+  const angle = item.upsc_angle || {};
+
+  function renderSection(title, value) {
+    if (!value || (Array.isArray(value) && value.length === 0)) {
+      return "";
+    }
+
+    const content = Array.isArray(value)
+      ? `<ul>${value.map(point =>
+          `<li>${escapeHTML(point)}</li>`
+        ).join("")}</ul>`
+      : `<p>${escapeHTML(value)}</p>`;
+
+    return `
+      <section class="upsc-note-section">
+        <h5>${escapeHTML(title)}</h5>
+        ${content}
+      </section>
+    `;
+  }
+
+  const sourceUrl = String(item.source_url || item.id || "");
+  const safeUrl = /^https?:\/\//i.test(sourceUrl)
+    ? escapeHTML(sourceUrl)
+    : "";
+
   return `
     <article class="news-item">
       <h4>${escapeHTML(item.title)}</h4>
+
       <p><strong>Date:</strong> ${formatDate(item.date)}</p>
       <p><strong>Source:</strong> ${escapeHTML(item.source || "Unknown")}</p>
       <p><strong>Subject:</strong> ${escapeHTML(item.category || "Miscellaneous")}</p>
 
-      ${item.summary
-        ? `<p>${escapeHTML(item.summary)}</p>`
-        : ""}
+      ${renderSection("What happened?", item.summary)}
 
-      ${item.source_url
-        ? `<a href="${escapeHTML(item.source_url)}"
-             target="_blank" rel="noopener noreferrer">
-             Read original article
-           </a>`
-        : ""}
+      <div class="upsc-analysis">
+        <h4>UPSC Analysis</h4>
+
+        ${renderSection("1. What is this about?", angle.what_it_is)}
+
+        ${renderSection("2. Why is it important for UPSC?", angle.why_relevant)}
+
+        ${renderSection("3. What does India need?", angle.india_needs)}
+
+        ${renderSection("4. Challenges and concerns", angle.challenges)}
+
+        ${renderSection("5. Way forward", angle.way_forward)}
+
+        ${renderSection("6. Prelims facts", item.prelims_facts)}
+
+        ${renderSection("7. Mains analysis", item.mains_analysis)}
+
+        ${renderSection("8. GS syllabus connection", angle.syllabus)}
+
+        ${!Object.values(angle).some(Boolean) &&
+          !item.mains_analysis &&
+          !item.prelims_facts?.length
+          ? "<p>Detailed UPSC notes are being prepared for this article.</p>"
+          : ""}
+      </div>
+
+      ${safeUrl ? `
+        <p class="pib-source-link">
+          <a href="${safeUrl}"
+             target="_blank"
+             rel="noopener noreferrer"
+             style="color:#0866d6;font-weight:700;text-decoration:underline;">
+             Read Original PIB Release ↗
+          </a>
+        </p>
+      ` : ""}
     </article>
   `;
 }
+
 
 function renderNews(section = "daily") {
   if (!currentAffairs) return;
