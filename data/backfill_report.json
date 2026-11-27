@@ -1,8 +1,10 @@
 {
   "period_start": "2026-04-01",
   "period_end": "2026-11-27",
-  "run_date_utc": "2026-11-27T05:09:54.746855+00:00",
-  "upsc_candidates": 38,
+  "run_date_utc": "2026-11-27T05:40:11.634288+00:00",
+  "source": "PIB All Releases archive",
+  "days_checked": 241,
+  "upsc_candidates": 0,
   "monthly_candidate_counts": {
     "2026-04": 0,
     "2026-05": 0,
@@ -10,52 +12,16 @@
     "2026-07": 0,
     "2026-08": 0,
     "2026-09": 0,
-    "2026-10": 1,
-    "2026-11": 37
+    "2026-10": 0,
+    "2026-11": 0
   },
-  "sources": [
-    {
-      "source": "PIB",
-      "status": "checked",
-      "upsc_candidates": 0
-    },
-    {
-      "source": "The Hindu",
-      "status": "checked",
-      "upsc_candidates": 21
-    },
-    {
-      "source": "Indian Express UPSC",
-      "status": "failed",
-      "error": "HTTP Error 403: Forbidden"
-    },
-    {
-      "source": "Indian Express Economy",
-      "status": "failed",
-      "error": "HTTP Error 403: Forbidden"
-    },
-    {
-      "source": "Indian Express Explained",
-      "status": "failed",
-      "error": "HTTP Error 403: Forbidden"
-    },
-    {
-      "source": "RBI Press Releases",
-      "status": "checked",
-      "upsc_candidates": 7
-    },
-    {
-      "source": "RBI Notifications",
-      "status": "checked",
-      "upsc_candidates": 10
-    }
-  ],
+  "failed_dates": [],
   "limitations": [
-    "This run checks RSS feeds, not the complete PIB archive.",
-    "RSS feeds may not contain all historical releases.",
-    "A topic match is only a screening result, not final UPSC relevance.",
-    "Every candidate requires content review before becoming study material.",
-    "No AI-generated notes are claimed or created by this script."
+    "This is a title-based UPSC relevance screen.",
+    "Candidates require review before becoming study material.",
+    "Only headlines, dates and official links are collected.",
+    "No full article text or AI-generated notes are claimed.",
+    "The existing live news.json file is not modified."
   ],
   "live_news_json_modified": false
 }
