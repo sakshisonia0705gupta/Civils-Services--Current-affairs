@@ -1,68 +1,61 @@
 {
   "period_start": "2026-04-01",
-  "period_end": "2026-11-15",
-  "run_date_utc": "2026-11-14T21:00:22.947453+00:00",
-  "total_candidates": 90,
-  "duplicate_urls_removed": 0,
+  "period_end": "2026-11-27",
+  "run_date_utc": "2026-11-27T05:09:54.746855+00:00",
+  "upsc_candidates": 38,
   "monthly_candidate_counts": {
     "2026-04": 0,
     "2026-05": 0,
     "2026-06": 0,
     "2026-07": 0,
     "2026-08": 0,
-    "2026-09": 3,
-    "2026-10": 12,
-    "2026-11": 75
+    "2026-09": 0,
+    "2026-10": 1,
+    "2026-11": 37
   },
   "sources": [
     {
       "source": "PIB",
       "status": "checked",
-      "candidate_count": 0,
-      "message": "Feed responded; historical coverage is not guaranteed."
+      "upsc_candidates": 0
     },
     {
       "source": "The Hindu",
       "status": "checked",
-      "candidate_count": 60,
-      "message": "Feed responded; historical coverage is not guaranteed."
+      "upsc_candidates": 21
     },
     {
       "source": "Indian Express UPSC",
       "status": "failed",
-      "candidate_count": 0,
-      "message": "HTTP Error 403: Forbidden"
+      "error": "HTTP Error 403: Forbidden"
     },
     {
       "source": "Indian Express Economy",
       "status": "failed",
-      "candidate_count": 0,
-      "message": "HTTP Error 403: Forbidden"
+      "error": "HTTP Error 403: Forbidden"
     },
     {
       "source": "Indian Express Explained",
       "status": "failed",
-      "candidate_count": 0,
-      "message": "HTTP Error 403: Forbidden"
+      "error": "HTTP Error 403: Forbidden"
     },
     {
       "source": "RBI Press Releases",
       "status": "checked",
-      "candidate_count": 10,
-      "message": "Feed responded; historical coverage is not guaranteed."
+      "upsc_candidates": 7
     },
     {
       "source": "RBI Notifications",
       "status": "checked",
-      "candidate_count": 10,
-      "message": "Feed responded; historical coverage is not guaranteed."
-    },
-    {
-      "source": "RBI Speeches",
-      "status": "checked",
-      "candidate_count": 10,
-      "message": "Feed responded; historical coverage is not guaranteed."
+      "upsc_candidates": 10
     }
   ],
-  "important_warning": "This is an RSS diagnostic, not proof of complete historical coverage. Zero results do not mean zero news existed. Full article review and archive-source checks are still required."
+  "limitations": [
+    "This run checks RSS feeds, not the complete PIB archive.",
+    "RSS feeds may not contain all historical releases.",
+    "A topic match is only a screening result, not final UPSC relevance.",
+    "Every candidate requires content review before becoming study material.",
+    "No AI-generated notes are claimed or created by this script."
+  ],
+  "live_news_json_modified": false
 }
