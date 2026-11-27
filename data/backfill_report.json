@@ -1,27 +1,94 @@
 {
-  "period_start": "2026-04-01",
-  "period_end": "2026-11-27",
-  "run_date_utc": "2026-11-27T05:40:11.634288+00:00",
-  "source": "PIB All Releases archive",
-  "days_checked": 241,
-  "upsc_candidates": 0,
-  "monthly_candidate_counts": {
-    "2026-04": 0,
-    "2026-05": 0,
-    "2026-06": 0,
-    "2026-07": 0,
-    "2026-08": 0,
-    "2026-09": 0,
-    "2026-10": 0,
-    "2026-11": 0
-  },
-  "failed_dates": [],
-  "limitations": [
-    "This is a title-based UPSC relevance screen.",
-    "Candidates require review before becoming study material.",
-    "Only headlines, dates and official links are collected.",
-    "No full article text or AI-generated notes are claimed.",
-    "The existing live news.json file is not modified."
+  "page_url": "https://www.pib.gov.in/AllRel.aspx?lang=1&reg=3",
+  "http_status": 200,
+  "page_title": "All Press Release: Press Information Bureau",
+  "release_links_found": 2,
+  "dropdowns_found": 6,
+  "dropdown_details": [
+    {
+      "name": "ctl00$Bar1$ddlregion",
+      "id": "Bar1_ddlregion",
+      "options": [
+        "PIB Delhi",
+        "PIB Mumbai",
+        "PIB Hyderabad",
+        "PIB Chennai",
+        "PIB Chandigarh",
+        "PIB Kolkata",
+        "PIB Bengaluru",
+        "PIB Bhubaneswar"
+      ]
+    },
+    {
+      "name": "ctl00$Bar1$ddlLang",
+      "id": "Bar1_ddlLang",
+      "options": [
+        "हिन्दी",
+        "English",
+        "Urdu"
+      ]
+    },
+    {
+      "name": "ctl00$ContentPlaceHolder1$ddlMinistry",
+      "id": "ContentPlaceHolder1_ddlMinistry",
+      "options": [
+        "All Ministry",
+        "President's Secretariat",
+        "Vice President's Secretariat",
+        "Prime Minister's Office",
+        "Lok Sabha Secretariat",
+        "Rajya Sabha Secretariat",
+        "Cabinet",
+        "Cabinet Committee Decisions"
+      ]
+    },
+    {
+      "name": "ctl00$ContentPlaceHolder1$ddlday",
+      "id": "ContentPlaceHolder1_ddlday",
+      "options": [
+        "All",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ]
+    },
+    {
+      "name": "ctl00$ContentPlaceHolder1$ddlMonth",
+      "id": "ContentPlaceHolder1_ddlMonth",
+      "options": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August"
+      ]
+    },
+    {
+      "name": "ctl00$ContentPlaceHolder1$ddlYear",
+      "id": "ContentPlaceHolder1_ddlYear",
+      "options": [
+        "2026",
+        "2025",
+        "2024",
+        "2023",
+        "2022",
+        "2021",
+        "2020",
+        "2019"
+      ]
+    }
   ],
+  "sample_titles": [
+    "PM shares a Sanskrit Subhashitam highlighting the spiritual bliss of satsang and devotion",
+    "STPI Inaugurates its 75th Centre in Bareilly to Strengthen Uttar Pradesh’s IT/ITeS and Startup Ecosystem"
+  ],
+  "diagnostic_only": true,
   "live_news_json_modified": false
 }
