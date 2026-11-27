@@ -1,221 +1,204 @@
 
 import json
 import re
-import urllib.request
-import xml.etree.ElementTree as ET
-from datetime import datetime, date, timezone
-from email.utils import parsedate_to_datetime
+import time
+from datetime import date, datetime, timezone
 from pathlib import Path
+from urllib.parse import urljoin
+
+import requests
+from bs4 import BeautifulSoup
 
 START_DATE = date(2026, 4, 1)
 END_DATE = date.today()
 
+BASE_URL = "https://www.pib.gov.in/AllRelease.aspx"
 PREVIEW = Path("data/backfill_preview.json")
 REPORT = Path("data/backfill_report.json")
 
 HEADERS = {
-    "User-Agent": "UPSC-Intelligence-Hub/1.0"
+    "User-Agent": "Mozilla/5.0 UPSC-Intelligence-Hub/1.0"
 }
-TIMEOUT = 30
 
-# Only sources useful for UPSC preparation.
-SOURCES = [
-    ("PIB", "https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1"),
-    ("The Hindu", "https://www.thehindu.com/news/national/?service=rss"),
-    ("Indian Express UPSC", "https://indianexpress.com/section/upsc-current-affairs/feed/"),
-    ("Indian Express Economy", "https://indianexpress.com/section/business/economy/feed/"),
-    ("Indian Express Explained", "https://indianexpress.com/section/explained/feed/"),
-    ("RBI Press Releases", "https://rbi.org.in/pressreleases_rss.xml"),
-    ("RBI Notifications", "https://rbi.org.in/notifications_rss.xml"),
-]
-
-# Broad syllabus-linked themes. These are screening signals,
-# not a claim that every matching article is automatically useful.
 TOPICS = {
-    "Polity & Governance": r"constitution|constitutional|supreme court|high court|judgment|judgement|parliament|bill|act\b|fundamental rights|federalism|election commission|governance|civil service|lokpal|data protection",
-    "Economy": r"rbi|reserve bank|repo rate|monetary policy|inflation|gdp|fiscal|budget|gst|tax|banking|financial inclusion|employment|poverty|exports|imports|trade|economic survey|sebi",
+    "Polity & Governance": r"constitution|supreme court|high court|judgment|judgement|parliament|bill|act\b|fundamental rights|federalism|election commission|governance|judiciary|data protection|tribunal",
+    "Economy": r"rbi|reserve bank|repo rate|monetary policy|inflation|gdp|fiscal|budget|gst|tax|banking|financial inclusion|employment|poverty|exports|imports|trade|economic survey|sebi|cpi|iip",
     "International Relations": r"bilateral|diplomatic|foreign policy|united nations|wto|g20|brics|quad|indo.pacific|treaty|summit|international cooperation",
     "Environment": r"climate|biodiversity|wildlife|forest|wetland|ramsar|pollution|renewable energy|ecosystem|species|national park|conservation|sustainability",
     "Science & Technology": r"isro|space mission|satellite|artificial intelligence|quantum|semiconductor|biotechnology|genome|research|innovation|nuclear energy|digital technology",
-    "Defence & Internal Security": r"armed forces|military exercise|border security|cyber security|cybersecurity|internal security|coast guard|defence production",
-    "Agriculture": r"agriculture|farmer|minimum support price|msp\b|crop|irrigation|food security|fertilizer|fisheries|animal husbandry",
+    "Defence & Security": r"armed forces|military exercise|border security|cyber security|cybersecurity|internal security|coast guard|defence production|drdo",
+    "Agriculture": r"agriculture|farmer|minimum support price|\bmsp\b|crop|irrigation|food security|fertilizer|fisheries|animal husbandry",
     "Society & Social Justice": r"public health|healthcare|nutrition|education|literacy|women empowerment|child welfare|social justice|tribal|sanitation|drinking water|disability",
     "History, Art & Culture": r"heritage|archaeology|unesco|museum|festival|traditional craft|handicraft|artisan|classical language|monument",
     "Reports & Institutions": r"report|index|ranking|census|survey|committee|commission|cag\b|statistics|parliamentary committee",
     "Disaster Management": r"disaster management|flood|drought|cyclone|earthquake|heatwave|early warning",
 }
 
-# A topic match is required. These cues help identify
-# developments with stronger policy or institutional significance.
-IMPORTANT_CUES = re.compile(
-    r"new policy|policy framework|scheme|mission|programme|"
-    r"program|guidelines|reform|regulation|report|index|"
-    r"agreement|treaty|judgment|act\b|bill\b|"
-    r"launch|approved|inaugurated|data release|"
-    r"conservation|research findings|monetary policy",
-    re.I
-)
-
-def local_name(tag):
-    return tag.split("}")[-1].lower()
-
-def child_text(element, names):
-    for child in element.iter():
-        if local_name(child.tag) in names and child.text:
-            return child.text.strip()
-    return ""
-
-def entry_link(element):
-    for child in element:
-        if local_name(child.tag) == "link":
-            link = child.attrib.get("href") or child.text
-            if link:
-                return link.strip()
-    return ""
-
-def parse_date(value):
-    if not value:
-        return None
-    try:
-        return parsedate_to_datetime(value).date()
-    except Exception:
-        pass
-    try:
-        return datetime.fromisoformat(
-            value.replace("Z", "+00:00")
-        ).date()
-    except Exception:
-        return None
-
-def classify(title, description):
-    text = (title + " " + description).lower()
-    matches = [
-        topic for topic, pattern in TOPICS.items()
-        if re.search(pattern, text, re.I)
-    ]
+def classify(title):
+    matches = []
+    for topic, pattern in TOPICS.items():
+        if re.search(pattern, title, re.I):
+            matches.append(topic)
     return matches
 
-def assess(title, description):
-    topics = classify(title, description)
-    text = title + " " + description
+def get_day_releases(day_value, month_value, year_value, session):
+    response = session.get(BASE_URL, timeout=40)
+    response.raise_for_status()
 
-    if not topics:
-        return None
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    # Retain topic matches for human review, while giving
-    # stronger priority to developments with policy cues.
-    priority = (
-        "High" if IMPORTANT_CUES.search(text)
-        else "Review"
+    def hidden_value(name):
+        element = soup.find("input", {"name": name})
+        return element.get("value", "") if element else ""
+
+    payload = {
+        "__VIEWSTATE": hidden_value("__VIEWSTATE"),
+        "__EVENTVALIDATION": hidden_value("__EVENTVALIDATION"),
+        "__VIEWSTATEGENERATOR": hidden_value("__VIEWSTATEGENERATOR"),
+        "__VIEWSTATEENCRYPTED": "",
+        "__LASTFOCUS": "",
+        "__EVENTTARGET": "ctl00$ContentPlaceHolder1$ddlMinistry",
+        "__EVENTARGUMENT": "",
+        "ctl00$Bar1$ddlregion": "3",
+        "ctl00$Bar1$ddlLang": "1",
+        "ctl00$ContentPlaceHolder1$ddlMinistry": "0",
+        "ctl00$ContentPlaceHolder1$ddlday": str(day_value),
+        "ctl00$ContentPlaceHolder1$ddlMonth": str(month_value),
+        "ctl00$ContentPlaceHolder1$ddlYear": str(year_value),
+    }
+
+    response = session.post(
+        BASE_URL,
+        data=payload,
+        headers={"Referer": BASE_URL},
+        timeout=40
     )
-    return topics, priority
+    response.raise_for_status()
 
-def fetch_source(name, url):
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-        root = ET.fromstring(response.read())
+    soup = BeautifulSoup(response.text, "html.parser")
+    area = soup.find("div", class_="content-area")
 
-    records = []
-    for entry in root.iter():
-        if local_name(entry.tag) not in ("item", "entry"):
+    if area is None:
+        raise ValueError("PIB archive result area was not found")
+
+    releases = []
+
+    for item in area.find_all("li"):
+        anchor = item.find("a", href=True)
+        if not anchor:
             continue
 
-        title = child_text(entry, {"title"})
-        link = entry_link(entry)
-        description = child_text(
-            entry, {"description", "summary"}
-        )
-        published = child_text(
-            entry, {"pubdate", "published", "updated", "date"}
-        )
-        article_date = parse_date(published)
+        title = " ".join(anchor.get_text(" ", strip=True).split())
+        link = urljoin(BASE_URL, anchor["href"])
 
-        if not title or not link or not article_date:
-            continue
-        if not link.startswith("https://"):
-            continue
-        if not START_DATE <= article_date <= END_DATE:
+        if not title or "pib.gov.in" not in link:
             continue
 
-        result = assess(title, description)
-        if not result:
+        link = link.replace("ReleseDetail", "ReleasePage")
+
+        topics = classify(title)
+        if not topics:
             continue
 
-        topics, priority = result
-        records.append({
+        releases.append({
             "title": title,
-            "date": article_date.isoformat(),
-            "month": article_date.strftime("%Y-%m"),
-            "source": name,
+            "date": date(
+                int(year_value), int(month_value), int(day_value)
+            ).isoformat(),
+            "month": f"{int(year_value):04d}-{int(month_value):02d}",
+            "source": "PIB",
             "source_url": link,
             "upsc_subjects": topics,
-            "priority": priority,
+            "priority": "Review",
             "review_status": "human_review_required",
             "notes_status": "not_prepared"
         })
 
-    return records
+    return releases
 
-def main():
-    all_records = []
-    source_report = []
-
-    for name, url in SOURCES:
-        try:
-            records = fetch_source(name, url)
-            all_records.extend(records)
-            source_report.append({
-                "source": name,
-                "status": "checked",
-                "upsc_candidates": len(records)
-            })
-            print(name, ":", len(records), "UPSC candidates")
-        except Exception as error:
-            source_report.append({
-                "source": name,
-                "status": "failed",
-                "error": str(error)[:250]
-            })
-            print(name, "FAILED:", str(error)[:150])
-
-    # Deduplicate identical original links.
-    unique = {}
-    for item in all_records:
-        key = item["source_url"].rstrip("/")
-        if key not in unique:
-            unique[key] = item
-
-    records = sorted(
-        unique.values(),
-        key=lambda item: (item["date"], item["title"].lower()),
-        reverse=True
-    )
-
-    month_counts = {}
-    current = date(2026, 4, 1)
-    while current <= END_DATE:
-        key = current.strftime("%Y-%m")
-        month_counts[key] = sum(
-            1 for item in records if item["month"] == key
-        )
+def month_range(start, end):
+    current = date(start.year, start.month, 1)
+    while current <= end:
+        yield current.year, current.month
         if current.month == 12:
             current = date(current.year + 1, 1, 1)
         else:
             current = date(current.year, current.month + 1, 1)
 
+def main():
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    all_records = []
+    errors = []
+    days_checked = 0
+
+    for year, month in month_range(START_DATE, END_DATE):
+        first = date(year, month, 1)
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+
+        last_day = min(
+            (next_month - date.resolution).day,
+            (END_DATE - first).days + 1
+        )
+
+        print(f"Checking PIB: {year}-{month:02d}")
+
+        for day in range(1, last_day + 1):
+            try:
+                records = get_day_releases(
+                    day, month, year, session
+                )
+                all_records.extend(records)
+                days_checked += 1
+                print(
+                    f"{year}-{month:02d}-{day:02d}: "
+                    f"{len(records)} relevant candidates"
+                )
+                time.sleep(0.15)
+
+            except Exception as error:
+                errors.append({
+                    "date": f"{year}-{month:02d}-{day:02d}",
+                    "error": str(error)[:200]
+                })
+                print("FAILED:", year, month, day, str(error)[:120])
+
+    unique = {}
+    for item in all_records:
+        unique[item["source_url"]] = item
+
+    records = sorted(
+        unique.values(),
+        key=lambda x: (x["date"], x["title"].lower()),
+        reverse=True
+    )
+
+    counts = {}
+    for year, month in month_range(START_DATE, END_DATE):
+        key = f"{year:04d}-{month:02d}"
+        counts[key] = sum(
+            1 for item in records if item["month"] == key
+        )
+
     report = {
         "period_start": START_DATE.isoformat(),
         "period_end": END_DATE.isoformat(),
         "run_date_utc": datetime.now(timezone.utc).isoformat(),
+        "source": "PIB All Releases archive",
+        "days_checked": days_checked,
         "upsc_candidates": len(records),
-        "monthly_candidate_counts": month_counts,
-        "sources": source_report,
+        "monthly_candidate_counts": counts,
+        "failed_dates": errors,
         "limitations": [
-            "This run checks RSS feeds, not the complete PIB archive.",
-            "RSS feeds may not contain all historical releases.",
-            "A topic match is only a screening result, not final UPSC relevance.",
-            "Every candidate requires content review before becoming study material.",
-            "No AI-generated notes are claimed or created by this script."
+            "This is a title-based UPSC relevance screen.",
+            "Candidates require review before becoming study material.",
+            "Only headlines, dates and official links are collected.",
+            "No full article text or AI-generated notes are claimed.",
+            "The existing live news.json file is not modified."
         ],
         "live_news_json_modified": False
     }
@@ -230,11 +213,12 @@ def main():
         encoding="utf-8"
     )
 
-    print("\nDiagnostic completed.")
-    print("UPSC candidates:", len(records))
-    print("Preview:", PREVIEW)
-    print("Report:", REPORT)
-    print("Existing news.json was NOT changed.")
+    print("BACKFILL DIAGNOSTIC FINISHED")
+    print("Candidates:", len(records))
+    print("Days checked:", days_checked)
+    print("Failed dates:", len(errors))
+    print("Monthly counts:", counts)
+    print("Live news.json was NOT changed.")
 
 if __name__ == "__main__":
     main()
